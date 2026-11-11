@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: Lib: FlatyUI-1.0
+## Notes: Flat, dark controls for addon settings windows.
+## Author: franlol
+## Version: @project-version@
+## X-License: MIT
+
+LibStub\LibStub.lua
+LibFlatyUI-1.0.lua

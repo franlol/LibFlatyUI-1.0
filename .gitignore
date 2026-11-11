@@ -1,0 +1,12 @@
+# Fetched by the packager (.pkgmeta externals)
+LibStub/
+
+# System
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
