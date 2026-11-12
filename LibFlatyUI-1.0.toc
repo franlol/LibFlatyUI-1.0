@@ -4,6 +4,7 @@
 ## Author: franlol
 ## Version: @project-version@
 ## X-License: MIT
+## X-Curse-Project-ID: 1799484
 
 LibStub\LibStub.lua
 LibFlatyUI-1.0.lua
