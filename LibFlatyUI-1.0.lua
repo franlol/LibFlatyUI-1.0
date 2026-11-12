@@ -63,6 +63,7 @@ lib.defaultTheme = {
     titleFont = "GameFontNormal",
     rowHeight = 18,        -- height of a one-line control
     gap = 10,              -- space between rows of a card
+    cardGap = 20,          -- space between cards, columns and split panes
     subGap = 2,            -- space above a sub-option (opts.sub) under its row
     pad = 10,              -- inner margin of a card
 }
@@ -1840,7 +1841,7 @@ function lib:New(theme)
     -- The cards take the whole width; only while the page scrolls they make
     -- room on the right for the scroll bar.
     ---------------------------------------------------------------------------
-    local BAR_ROOM = 12   -- scroll bar (8) and the space around it
+    local function BarRoom() return 1 + 8 + T.pad end   -- edge, scroll bar, space to the cards
 
     function UI.Page(parent, columns)
         local page = CreateFrame("Frame", nil, parent)
@@ -1882,7 +1883,7 @@ function lib:New(theme)
         -- lays the cards out in a width; returns the height they take
         local function Place(self, w)
             content:SetWidth(w)
-            local gap = T.gap
+            local gap = T.cardGap
             local n = #self.cols
             local cw = math.floor((w - (n - 1) * gap) / n)
             local low = 0
@@ -1912,10 +1913,10 @@ function lib:New(theme)
             -- full width first; if it does not fit, again with room for the bar
             local h = Place(self, w)
             local scrolls = h > view
-            if scrolls then h = Place(self, w - BAR_ROOM) end
-            sf:SetPoint("BOTTOMRIGHT", scrolls and -BAR_ROOM or 0, 0)
+            if scrolls then h = Place(self, w - BarRoom()) end
+            sf:SetPoint("BOTTOMRIGHT", scrolls and -BarRoom() or 0, 0)
             -- scrolled to the end, a little space under the last card
-            content:SetHeight(scrolls and h + T.gap + 4 or h)
+            content:SetHeight(scrolls and h + T.pad + 4 or h)
             busy = false
             UpdateBar()
         end
@@ -1935,7 +1936,7 @@ function lib:New(theme)
         left:SetPoint("BOTTOMLEFT")
         left:SetWidth(leftWidth)
         local right = CreateFrame("Frame", nil, parent)
-        right:SetPoint("TOPLEFT", left, "TOPRIGHT", T.gap, 0)
+        right:SetPoint("TOPLEFT", left, "TOPRIGHT", T.cardGap, 0)
         right:SetPoint("BOTTOMRIGHT")
         return UI.Page(left, 1), UI.Page(right, 1)
     end
