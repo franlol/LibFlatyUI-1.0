@@ -33,7 +33,7 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 8
+local MAJOR, MINOR = "LibFlatyUI-1.0", 9
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -72,6 +72,97 @@ local function Merge(base, over)
     for k, v in pairs(base) do t[k] = v end
     for k, v in pairs(over or {}) do t[k] = v end
     return t
+end
+
+-------------------------------------------------------------------------------
+-- Flat marks drawn from rotated bars (no image files, sharp at any scale)
+-------------------------------------------------------------------------------
+-- Tick for a 14x14 check box, and a dash for "some" (a group with part of
+-- its items on). A frame, so it fades with SetAlpha. f:SetPartial(on)
+local function NewTick(box, color)
+    local f = CreateFrame("Frame", nil, box)
+    f:SetAllPoints()
+    f:SetFrameLevel(box:GetFrameLevel() + 1)
+    local function Bar(w, h, x, y, deg)
+        local t = f:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(color[1], color[2], color[3], 1)
+        t:SetSize(w, h)
+        t:SetPoint("CENTER", x, y)
+        if deg then t:SetRotation(math.rad(deg)) end
+        return t
+    end
+    -- tick corners (from the box center): (-3.5, 0) -> (-1, -2.5) -> (4, 3)
+    f.short = Bar(4.6, 2, -2.25, -1.25, -45)
+    f.long = Bar(8.4, 2, 1.5, 0.25, 47.7)
+    f.dash = Bar(8, 2, 0, 0)
+    function f:SetPartial(on)
+        self.short:SetShown(not on)
+        self.long:SetShown(not on)
+        self.dash:SetShown(on and true or false)
+    end
+    f:SetPartial(false)
+    return f
+end
+
+-- Chevron, 10x10: ">" closed, "v" open; turning rotates it a quarter turn.
+-- f:SetOpen(open, animate), f:SetColor(r, g, b)
+local TURN = 0.15
+local function NewChevron(parent, color)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetSize(10, 10)
+    local a = f:CreateTexture(nil, "OVERLAY")
+    local b = f:CreateTexture(nil, "OVERLAY")
+    a:SetSize(6.4, 2)
+    b:SetSize(6.4, 2)
+    function f:SetColor(r, g, bl)
+        a:SetColorTexture(r, g, bl, 1)
+        b:SetColorTexture(r, g, bl, 1)
+    end
+    -- p = 0: ">" (bars from (-2, 4) and (-2, -4) to (2, 0)); p = 1: turned
+    -- 90 degrees clockwise
+    local function Draw(p)
+        p = p * p * (3 - 2 * p)   -- smooth start and end
+        local th = -math.pi / 2 * p
+        local c, s = math.cos(th), math.sin(th)
+        local function Put(tex, x, y, deg)
+            tex:ClearAllPoints()
+            tex:SetPoint("CENTER", x * c - y * s, x * s + y * c)
+            tex:SetRotation(math.rad(deg) + th)
+        end
+        Put(a, 0, 2, -45)
+        Put(b, 0, -2, 45)
+    end
+    local function Step(self, elapsed)
+        local d = elapsed / TURN
+        if self.goal > self.p then self.p = math.min(self.goal, self.p + d)
+        else self.p = math.max(self.goal, self.p - d) end
+        Draw(self.p)
+        if self.p == self.goal then self:SetScript("OnUpdate", nil) end
+    end
+    -- the first call, and any call while hidden, jumps straight to the state
+    function f:SetOpen(open, animate)
+        local goal = open and 1 or 0
+        if self.goal == goal then return end
+        local first = self.goal == nil
+        self.goal = goal
+        if first or not animate or not self:IsVisible() then
+            self.p = goal
+            self:SetScript("OnUpdate", nil)
+            Draw(goal)
+            return
+        end
+        self:SetScript("OnUpdate", Step)
+    end
+    -- hidden mid-turn (a reused list row): finish, or it stays crooked
+    f:SetScript("OnHide", function(self)
+        if self.goal and self.p ~= self.goal then
+            self.p = self.goal
+            self:SetScript("OnUpdate", nil)
+            Draw(self.goal)
+        end
+    end)
+    f:SetColor(color[1], color[2], color[3])
+    return f
 end
 
 -- Only one dropdown list can be open at a time, for every instance
@@ -253,7 +344,7 @@ function lib:New(theme)
     end
 
     ---------------------------------------------------------------------------
-    -- Check box (small square with a brand-color mark; the mark fades in/out)
+    -- Check box (small square with a brand-color tick; the tick fades in/out)
     ---------------------------------------------------------------------------
     local function FadeTo(region, target, duration)
         region.fadeTarget = target
@@ -277,10 +368,7 @@ function lib:New(theme)
         c:SetPoint("LEFT")
         c.borderColor = T.border
         UI.Backdrop(c, T.field)
-        c.mark = c:CreateTexture(nil, "OVERLAY")
-        c.mark:SetPoint("TOPLEFT", 3, -3)
-        c.mark:SetPoint("BOTTOMRIGHT", -3, 3)
-        c.mark:SetColorTexture(A[1], A[2], A[3], 1)
+        c.mark = NewTick(c, A)
         c.mark.fadeHolder = c
         r.label = UI.Text(r, label)
         r.label:SetPoint("LEFT", c, "RIGHT", 6, 0)
@@ -993,115 +1081,574 @@ function lib:New(theme)
     end
 
     ---------------------------------------------------------------------------
-    -- Selectable list
-    --   opts.items()              -> the list to show
-    --   opts.label(item, index)   -> text of a row
-    --   opts.selected()           -> index of the selected row (or nil)
-    --   opts.onSelect(index)
-    --   opts.decorate(row, item, index)  optional extra pieces per row
-    --   opts.onReorder(from, to)  optional: rows can be dragged to reorder
-    --   opts.rowHeight            default 20
+    -- List: one widget for every list. A dark box that always shows `rows`
+    -- rows (it does not shrink to its content) and scrolls when longer.
+    --
+    --   Row:  [box] [lead] Name ................ secondary  TAG  [x]
+    --
+    -- Every piece but the name is optional:
+    --   opts.items()               -> the rows (already flattened, see groups)
+    --   opts.label(item, i)        -> name text
+    --   opts.off(item)             -> true: name dimmed (hidden / disabled item)
+    --   opts.lead                  = "icon" | "swatch" | "dot"
+    --   opts.icon(item)            -> texture             (lead = "icon")
+    --   opts.color(item)           -> { r, g, b } or nil  (lead = "swatch"/"dot")
+    --   opts.secondary(item)       -> grey text on the right (ID, count...)
+    --   opts.tag(item)             -> text, { r, g, b }: short label in its own
+    --                                 column (as wide as the longest, up to
+    --                                 opts.tagWidth, default 90)
+    --   opts.columns               = { name, secondary, tag }: column titles
+    --                                 in a strip on top (adds height)
+    --   opts.selected(item, i)     -> true for the selected row (returning the
+    --                                 selected index also works)
+    --   opts.onSelect(i, item)
+    --   opts.checked(item)         -> true | false | "partial": check box on
+    --                                 each row; on a group header "partial"
+    --                                 shows a dash (some of the group)
+    --   opts.onCheck(item, value)  without onSelect, a row click toggles too
+    --   opts.onRemove(i, item)     red x on every row. The first click marks
+    --                                 the row ("Click again to confirm", it
+    --                                 wins the space over name and tag); the
+    --                                 second removes it. A double click does
+    --                                 not count; after 3 s it goes back.
+    --                                 The addon keeps its own selection right.
+    --   opts.confirmRemove = false x removes at once
+    --   opts.onReorder(from, to)   rows can be dragged; the others slide
+    --   opts.spell(item)           -> spell ID: spell tooltip on hover
+    --   opts.empty                 text shown when there are no rows
+    --   opts.rows                  visible rows (default 8)
+    --   opts.rowHeight             default 20
+    --   opts.decorate(row, item, i) extra pieces per row (row.name, alias
+    --                                 row.text)
+    -- Groups: rows { header = true, label, count, closed, off } open and
+    -- close with a chevron (opts.onToggle(item) changes `closed`); the
+    -- items under an open header follow it in items(). Opening and closing
+    -- slides the rows.
+    -- Texts that do not fit end in "..." and show whole on hover. The name
+    -- keeps at least 80 px; the secondary takes at most 40% of the row.
     ---------------------------------------------------------------------------
     function UI.List(parent, opts)
         local h = opts.rowHeight or 20
-        local step = h + 1 -- each row and the line under it
-        local r = Row(parent, 10, opts)
-        -- a field like the inputs: dark box with a border, rows inside it
+        local shown = opts.rows or 8
+        local hh = opts.columns and 18 or 0   -- column titles strip
+        local r = Row(parent, shown * h + 2 + hh, opts)
         local box = CreateFrame("Frame", nil, r, "BackdropTemplate")
         box:SetAllPoints()
         UI.Backdrop(box, T.fieldDark, T.border)
         box:SetFrameLevel(r:GetFrameLevel())
-        local rows = {}
-        local dragFrom
-        -- where a dragged row will land: above the box and the rows
-        local over = CreateFrame("Frame", nil, r)
-        over:SetAllPoints()
-        over:SetFrameLevel(box:GetFrameLevel() + 5)
-        local marker = over:CreateTexture(nil, "OVERLAY")
-        marker:SetHeight(2)
-        marker:SetColorTexture(A[1], A[2], A[3], 1)
-        marker:Hide()
+        if r.SetClipsChildren then r:SetClipsChildren(true) end   -- sliding rows stay inside
 
-        local function IndexAtCursor()
+        local offset, lines = 0, {}
+        local grouped = false
+        local inset = 1                   -- right margin of the rows (12 with the scroll bar)
+        local tagW = 0                    -- fits the longest tag (set on refresh)
+        local rowW = 200                  -- width the card gives the list
+        local RIGHT0 = opts.onRemove and 25 or 6   -- space kept for the x
+        local MIN_NAME = 80
+        local HEADER_X, ITEM_X = 22, 32   -- grouped rows sit 10 px in from their header
+
+        local function IsSelected(item, i)
+            if not opts.selected then return false end
+            local s = opts.selected(item, i)
+            if type(s) == "number" then return s == i end
+            return s and true or false
+        end
+
+        -- width of a text without limits; the measuring string sits in an
+        -- invisible frame (its own alpha resets when its font changes)
+        local meterHolder = CreateFrame("Frame", nil, r)
+        meterHolder:SetSize(1, 1)
+        meterHolder:SetPoint("TOPLEFT")
+        meterHolder:SetAlpha(0)
+        local meter = meterHolder:CreateFontString(nil, "OVERLAY", T.labelFont)
+        meter:SetPoint("TOPLEFT")
+        local function Measure(text)
+            if not text or text == "" then return 0 end
+            meter:SetText(text)
+            return math.ceil(meter:GetStringWidth())
+        end
+
+        -- column titles
+        local cols
+        if opts.columns then
+            cols = CreateFrame("Frame", nil, r)
+            cols:SetPoint("TOPLEFT", 1, -1)
+            cols:SetPoint("TOPRIGHT", -1, -1)
+            cols:SetHeight(hh)
+            cols:SetFrameLevel(box:GetFrameLevel() + 2)
+            local bg = cols:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg:SetColorTexture(1, 1, 1, 0.04)
+            local line = cols:CreateTexture(nil, "BORDER")
+            line:SetPoint("BOTTOMLEFT")
+            line:SetPoint("BOTTOMRIGHT")
+            line:SetHeight(1)
+            line:SetColorTexture(unpack(T.cardBorder))
+            local grey = { 0.55, 0.55, 0.6 }
+            cols.name = UI.Text(cols, opts.columns.name or "", T.labelFont, grey)
+            cols.sec = UI.Text(cols, opts.columns.secondary or "", T.labelFont, grey)
+            cols.sec:SetJustifyH("RIGHT")
+            cols.tag = UI.Text(cols, opts.columns.tag or "", T.labelFont, grey)
+            for _, fs in ipairs({ cols.name, cols.sec, cols.tag }) do fs:SetWordWrap(false) end
+        end
+
+        local bar = UI.ScrollBar(r, function(v)
+            offset = v
+            r.Refresh()
+        end)
+        bar:SetPoint("TOPRIGHT", -2, -2 - hh)
+        bar:SetPoint("BOTTOMRIGHT", -2, 2)
+        bar:SetFrameLevel(box:GetFrameLevel() + 6)
+        r:EnableMouseWheel(true)
+        r:SetScript("OnMouseWheel", function(_, d)
+            if r.dragging then return end
+            offset = offset - d
+            r.Refresh()
+        end)
+
+        local empty = UI.Text(r, opts.empty or "", T.labelFont, T.muted)
+        empty:SetPoint("LEFT", 12, -hh / 2)
+        empty:SetPoint("RIGHT", -12, -hh / 2)
+        empty:SetJustifyH("CENTER")
+        empty:SetWordWrap(true)
+
+        -- row slot i, moved down by `shift` pixels (animations)
+        local function PlaceLine(line, i, shift)
+            local y = -1 - hh - (i - 1) * h - (shift or 0)
+            line:ClearAllPoints()
+            line:SetPoint("TOPLEFT", 1, y)
+            line:SetPoint("TOPRIGHT", -inset, y)
+        end
+
+        -- Opening or closing a group: each row starts where its item was
+        -- (prevPos) and eases to its place; new rows come out from under
+        -- their header and fade in.
+        local prevPos, prevOffset, toggled = {}, 0, nil
+        local slider = CreateFrame("Frame", nil, r)
+        local function Slide(_, elapsed)
+            local k = math.min(1, elapsed * 14)
+            local busy = false
+            for i, line in ipairs(lines) do
+                if line:IsShown() and ((line.shift or 0) ~= 0 or line:GetAlpha() < 1) then
+                    line.shift = line.shift - line.shift * k
+                    if math.abs(line.shift) < 0.5 then line.shift = 0 end
+                    line:SetAlpha(math.min(1, line:GetAlpha() + elapsed / 0.2))
+                    PlaceLine(line, i, line.shift)
+                    busy = true
+                end
+            end
+            if not busy then slider:SetScript("OnUpdate", nil) end
+        end
+
+        -- remove: the row waiting for the second click
+        local armed, armToken, armedAt = nil, 0, 0
+        r:HookScript("OnHide", function() armed = nil end)
+
+        -- Drag to reorder. The mouse is followed by hand from the press until
+        -- the button is released (OnDragStart/Stop start late, so the row
+        -- jumped, and a missed stop left it stuck).
+        local dragFrom, dragLine, grab, press
+        local function CursorY()
             local _, cy = GetCursorPosition()
-            cy = cy / r:GetEffectiveScale()
-            local top = r:GetTop()
-            if not top then return 1 end
-            local n = #opts.items()
-            return math.max(1, math.min(n, math.floor((top - 1 - cy) / step) + 1))
+            return cy / r:GetEffectiveScale()
+        end
+        local function DragTop()
+            local n = math.min(shown, #opts.items() - offset)
+            local y = (r:GetTop() - 1 - hh) - CursorY() - grab
+            return math.max(0, math.min((n - 1) * h, y))
+        end
+        local function DropIndex()
+            local i = math.floor((DragTop() + h / 2) / h) + 1 + offset
+            return math.max(1, math.min(#opts.items(), i))
+        end
+        local function DragUpdate(elapsed)
+            PlaceLine(dragLine, 1, DragTop())
+            local to = DropIndex()
+            local k = math.min(1, elapsed * 14)
+            for i, line in ipairs(lines) do
+                if line ~= dragLine and line:IsShown() then
+                    local idx = i + offset
+                    local target = 0
+                    if dragFrom < to and idx > dragFrom and idx <= to then target = -h
+                    elseif dragFrom > to and idx >= to and idx < dragFrom then target = h end
+                    line.shift = (line.shift or 0) + (target - (line.shift or 0)) * k
+                    if math.abs(line.shift - target) < 0.5 then line.shift = target end
+                    PlaceLine(line, i, line.shift)
+                end
+            end
+        end
+        local function StartDrag(line)
+            grab = line:GetTop() - press.y   -- keeps the grab point: no jump
+            dragFrom, dragLine = line.index, line
+            r.dragging = true
+            line:SetFrameLevel(box:GetFrameLevel() + 4)
+            line.bg:SetColorTexture(A[1], A[2], A[3], 0.35)
+        end
+        local function FinishDrag()
+            r:SetScript("OnUpdate", nil)
+            press = nil
+            if not r.dragging then return end
+            local to, from, line = DropIndex(), dragFrom, dragLine
+            dragFrom, dragLine, r.dragging = nil, nil, nil
+            line:SetFrameLevel(box:GetFrameLevel() + 2)
+            line.justDropped = true   -- the click that follows the release is ignored
+            for _, l in ipairs(lines) do l.shift = 0 end
+            if to ~= from then opts.onReorder(from, to) end
+            Changed()
+            r.Refresh()
+        end
+        local function Watch(_, elapsed)
+            if not IsMouseButtonDown("LeftButton") then FinishDrag() return end
+            if not r.dragging then
+                if math.abs(CursorY() - press.y) < 4 then return end
+                StartDrag(press.line)
+            end
+            DragUpdate(elapsed)
+        end
+
+        local function Toggle(item, value)
+            opts.onCheck(item, value)
+            Changed()
+        end
+
+        local function NewLine(i)
+            local line = CreateFrame("Button", nil, r)
+            line:SetHeight(h)
+            PlaceLine(line, i)
+            line:SetFrameLevel(box:GetFrameLevel() + 2)
+            line.bg = line:CreateTexture(nil, "BACKGROUND")
+            line.bg:SetAllPoints()
+            local hl = line:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.07)
+            line.bar = line:CreateTexture(nil, "ARTWORK")
+            line.bar:SetPoint("TOPLEFT")
+            line.bar:SetPoint("BOTTOMLEFT")
+            line.bar:SetWidth(2)
+            line.bar:SetColorTexture(A[1], A[2], A[3], 1)
+            -- faint line above a group header (not above the first row)
+            line.sep = line:CreateTexture(nil, "BORDER")
+            line.sep:SetPoint("TOPLEFT", 6, 0)
+            line.sep:SetPoint("TOPRIGHT", -6, 0)
+            line.sep:SetHeight(1)
+            line.sep:SetColorTexture(1, 1, 1, 0.06)
+            line.exp = NewChevron(line, { 0.55, 0.55, 0.6 })
+            line.exp:SetPoint("LEFT", 6, 0)
+            if opts.checked then
+                local c = CreateFrame("Button", nil, line, "BackdropTemplate")
+                c:SetSize(14, 14)
+                c.borderColor = T.border
+                UI.Backdrop(c, T.field)
+                c.mark = NewTick(c, A)
+                c:SetScript("OnEnter", function(self) Hover(self, true) end)
+                c:SetScript("OnLeave", function(self) Hover(self, false) end)
+                c:SetScript("OnClick", function(self)
+                    local l = self:GetParent()
+                    if l.item then Toggle(l.item, opts.checked(l.item) ~= true) end
+                end)
+                line.check = c
+            end
+            line.lead = line:CreateTexture(nil, "ARTWORK")
+            line.name = UI.Text(line, "")
+            line.name:SetWordWrap(false)
+            line.text = line.name   -- name used by decorate before 9
+            line.sec = UI.Text(line, "", T.labelFont, T.muted)
+            line.sec:SetJustifyH("RIGHT")
+            line.sec:SetWordWrap(false)
+            line.tag = UI.Text(line, "")
+            line.tag:SetWordWrap(false)
+
+            if opts.onRemove then
+                line.remove = UI.Button(line, "x", 16, 16, function(self)
+                    local l = self:GetParent()
+                    if not l.item then return end
+                    -- a double click is not a confirmation
+                    if armed == l.item and GetTime() - armedAt < 0.4 then return end
+                    if opts.confirmRemove ~= false and armed ~= l.item then
+                        armed, armedAt = l.item, GetTime()
+                        armToken = armToken + 1
+                        local mine = armToken
+                        C_Timer.After(3, function()
+                            if armToken == mine and armed then
+                                armed = nil
+                                r.Refresh()
+                            end
+                        end)
+                        r.Refresh()
+                        return
+                    end
+                    armed = nil
+                    opts.onRemove(l.index, l.item)
+                    Changed()
+                end)
+                line.remove.text:SetTextColor(unpack(T.danger))
+                line.remove:SetPoint("RIGHT", -3, 0)
+            end
+
+            line:SetScript("OnClick", function(self)
+                local item = self.item
+                if self.justDropped then
+                    self.justDropped = nil
+                    return
+                end
+                if not item then return end
+                if item.header then
+                    toggled = item   -- the next refresh slides the rows
+                    if opts.onToggle then opts.onToggle(item) end
+                    Changed()
+                elseif opts.onSelect then
+                    opts.onSelect(self.index, item)
+                    Changed()
+                elseif opts.checked then
+                    Toggle(item, opts.checked(item) ~= true)
+                end
+            end)
+            -- tooltip: the spell, and the full texts when they were cut
+            line:SetScript("OnEnter", function(self)
+                if not self.item then return end
+                local id = not self.item.header and opts.spell and opts.spell(self.item)
+                if not id and not self.cut then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if id then
+                    GameTooltip:SetSpellByID(id)
+                else
+                    GameTooltip:SetText(self.fullName or "", 1, 1, 1)
+                end
+                if self.cut and self.fullSec and self.fullSec ~= "" then
+                    GameTooltip:AddLine(self.fullSec, T.muted[1], T.muted[2], T.muted[3], true)
+                end
+                GameTooltip:Show()
+            end)
+            line:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            if opts.onReorder then
+                line:SetScript("OnMouseDown", function(self, button)
+                    self.justDropped = nil
+                    if button ~= "LeftButton" or not self.item or self.item.header then return end
+                    press = { line = self, y = CursorY() }
+                    r:SetScript("OnUpdate", Watch)
+                end)
+                line:SetScript("OnMouseUp", function()
+                    if press or r.dragging then FinishDrag() end
+                end)
+            end
+            lines[i] = line
+            return line
+        end
+
+        -- check box at x; returns where the next piece starts
+        local function PaintCheck(line, item, x)
+            local c = line.check
+            if not c then return x end
+            local state = opts.checked(item)
+            c:ClearAllPoints()
+            c:SetPoint("LEFT", x, 0)
+            c.mark:SetPartial(state == "partial")
+            c.mark:SetShown(state and true or false)
+            return x + 14 + 6
+        end
+
+        -- Shares the row from the right: [x], tag column, secondary (up to
+        -- 40%, never leaving the name under MIN_NAME), then the name.
+        -- doomed (waiting for the second click on x): the message wins, the
+        -- tag hides and the name gives up the space the message needs.
+        local function Fit(line, nameX, secText, tagText, doomed)
+            local W = rowW - 1 - inset
+            local right = RIGHT0
+            line.tag:ClearAllPoints()
+            line.tag:SetPoint("RIGHT", -right, 0)
+            line.tag:SetWidth(math.max(1, tagW))
+            line.tag:SetText(doomed and "" or (tagText or ""))
+            if tagW > 0 and not doomed then right = right + tagW + 8 end
+
+            local sw = Measure(secText)
+            local avail = W - right - nameX - 8
+            local secW
+            if doomed then
+                secW = math.min(sw, math.max(0, avail))
+            else
+                secW = math.min(sw, math.max(0, math.min(math.floor(W * 0.4), avail - MIN_NAME)))
+            end
+            line.sec:ClearAllPoints()
+            line.sec:SetPoint("RIGHT", -right, 0)
+            line.sec:SetWidth(math.max(1, secW))
+            line.sec:SetText(secText or "")
+            line.sec:SetShown(secW > 0)
+            if secW > 0 then right = right + secW + 8 end
+
+            local nw = W - right - nameX
+            line.name:ClearAllPoints()
+            line.name:SetPoint("LEFT", nameX, 0)
+            line.name:SetWidth(math.max(1, nw))
+            line.name:SetShown(nw >= 12)
+            line.fullName, line.fullSec = line.name:GetText(), secText
+            line.cut = Measure(line.fullName) > nw or sw > secW
+        end
+
+        -- Group headers are structure, not state: same small font as the
+        -- rows and neutral colors (the accent is for selection and checks);
+        -- the chevron, the separator and the indent carry the hierarchy.
+        local function PaintHeader(line, item)
+            line.bg:SetColorTexture(1, 1, 1, 0)
+            line.sep:SetShown(line.index > 1)
+            line.bar:Hide()
+            line.lead:Hide()
+            -- animated only when this same group was toggled (not when the
+            -- row slot now shows another group)
+            local same = line.expItem == item
+            line.expItem = item
+            line.exp:SetOpen(not item.closed, same)
+            line.exp:Show()
+            line.name:SetText(item.label or "")
+            if item.off then line.name:SetTextColor(0.45, 0.45, 0.45)
+            else line.name:SetTextColor(0.85, 0.85, 0.88) end
+            line.sec:SetTextColor(0.5, 0.5, 0.55)
+            if line.check then line.check:Show() end
+            Fit(line, PaintCheck(line, item, HEADER_X), item.count, nil, false)
+            if line.remove then line.remove:Hide() end
+        end
+
+        local function PaintItem(line, item, i)
+            local on = IsSelected(item, i)
+            local doomed = armed == item
+            if doomed then
+                line.bg:SetColorTexture(T.danger[1], T.danger[2], T.danger[3], 0.15)
+            else
+                line.bg:SetColorTexture(A[1], A[2], A[3], on and 0.22 or 0)
+            end
+            line.bar:SetShown(on)
+            line.exp:Hide()
+            line.sep:Hide()
+            if line.check then line.check:Show() end
+            local x = PaintCheck(line, item, grouped and ITEM_X or 8)
+            local lead = line.lead
+            lead:ClearAllPoints()
+            lead:SetTexCoord(0, 1, 0, 1)
+            if opts.lead == "icon" then
+                lead:SetSize(16, 16)
+                lead:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                lead:SetTexture(opts.icon(item) or 134400)
+                lead:SetPoint("LEFT", x, 0)
+                lead:Show()
+                x = x + 16 + 6
+            elseif opts.lead == "swatch" or opts.lead == "dot" then
+                local s = opts.lead == "swatch" and 8 or 6
+                local c = opts.color(item)
+                lead:SetSize(s, s)
+                lead:SetPoint("LEFT", x + (8 - s) / 2, 0)
+                if c then lead:SetColorTexture(c[1], c[2], c[3], 1) end
+                lead:SetShown(c ~= nil)
+                x = x + 8 + 6
+            else
+                lead:Hide()
+            end
+            line.name:SetText(opts.label(item, i) or "")
+            if opts.off and opts.off(item) then line.name:SetTextColor(0.45, 0.45, 0.45)
+            else line.name:SetTextColor(unpack(T.text)) end
+            local secText
+            if doomed then
+                secText = UI.strings.confirm
+                line.sec:SetTextColor(unpack(T.danger))
+            else
+                secText = opts.secondary and opts.secondary(item) or ""
+                line.sec:SetTextColor(unpack(T.muted))
+            end
+            local tagText, tagColor
+            if opts.tag then tagText, tagColor = opts.tag(item) end
+            line.tag:SetTextColor(unpack(tagColor or T.muted))
+            Fit(line, x, secText, tagText, doomed)
+            if line.remove then
+                local b = line.remove
+                b.borderColor = doomed and { T.danger[1], T.danger[2], T.danger[3], 1 } or T.border
+                b:SetBackdropBorderColor(unpack(b.borderColor))
+                b:Show()
+            end
+            if opts.decorate then opts.decorate(line, item, i) end
+        end
+
+        r.OnWidth = function(w)
+            empty:SetWidth(w - 24)
+            if w ~= rowW then
+                rowW = w
+                r.Refresh()
+            end
         end
 
         r.Refresh = function()
-            local list = opts.items()
-            local sel = opts.selected and opts.selected()
-            for i, item in ipairs(list) do
-                local row = rows[i]
-                if not row then
-                    row = CreateFrame("Button", nil, r)
-                    row:SetFrameLevel(box:GetFrameLevel() + 2)
-                    row.bg = row:CreateTexture(nil, "BACKGROUND")
-                    row.bg:SetAllPoints()
-                    -- thin line under the row (not under the last one)
-                    row.line = row:CreateTexture(nil, "BORDER")
-                    row.line:SetPoint("TOPLEFT", row, "BOTTOMLEFT")
-                    row.line:SetPoint("TOPRIGHT", row, "BOTTOMRIGHT")
-                    row.line:SetHeight(1)
-                    row.line:SetColorTexture(unpack(T.cardBorder))
-                    local hl = row:CreateTexture(nil, "HIGHLIGHT")
-                    hl:SetAllPoints()
-                    hl:SetColorTexture(1, 1, 1, 0.07)
-                    row.bar = row:CreateTexture(nil, "ARTWORK")
-                    row.bar:SetPoint("TOPLEFT")
-                    row.bar:SetPoint("BOTTOMLEFT")
-                    row.bar:SetWidth(2)
-                    row.bar:SetColorTexture(A[1], A[2], A[3], 1)
-                    row.text = UI.Text(row, "")
-                    row.text:SetPoint("LEFT", 8, 0)
-                    row.text:SetPoint("RIGHT", -6, 0)
-                    row.text:SetWordWrap(false)
-                    if opts.onReorder then
-                        row:RegisterForDrag("LeftButton")
-                        row:SetScript("OnDragStart", function(self)
-                            dragFrom = self.index
-                            r:SetScript("OnUpdate", function()
-                                local to = IndexAtCursor()
-                                marker:ClearAllPoints()
-                                marker:SetPoint("TOPLEFT", 1, -(to - 1) * step)
-                                marker:SetPoint("TOPRIGHT", -1, -(to - 1) * step)
-                                marker:Show()
-                            end)
-                        end)
-                        row:SetScript("OnDragStop", function()
-                            r:SetScript("OnUpdate", nil)
-                            marker:Hide()
-                            local to = IndexAtCursor()
-                            if dragFrom and to ~= dragFrom then opts.onReorder(dragFrom, to) end
-                            dragFrom = nil
-                            Changed()
-                        end)
-                    end
-                    rows[i] = row
-                end
-                row.index = i
-                row:SetScript("OnClick", function(self)
-                    if opts.onSelect then opts.onSelect(self.index) end
-                    Changed()
-                end)
-                local on = sel == i
-                row.bg:SetColorTexture(A[1], A[2], A[3], on and 0.22 or 0)
-                row.bar:SetShown(on)
-                row.text:SetText(opts.label(item, i))
-                row.text:SetTextColor(unpack(on and T.text or T.muted))
-                if opts.decorate then opts.decorate(row, item, i) end
-                row:ClearAllPoints()
-                row:SetPoint("TOPLEFT", 1, -1 - (i - 1) * step)
-                row:SetPoint("TOPRIGHT", -1, -1 - (i - 1) * step)
-                row:SetHeight(h)
-                row.line:SetShown(i < #list)
-                row:Show()
+            if r.dragging then return end
+            local list = opts.items() or {}
+            local n = #list
+            local maxOff = math.max(0, n - shown)
+            offset = math.max(0, math.min(offset, maxOff))
+            bar:SetRange(maxOff, n > 0 and shown / n or 1)
+            bar:SetPos(offset)
+            grouped = false
+            for _, item in ipairs(list) do
+                if item.header then grouped = true break end
             end
-            for i = #list + 1, #rows do rows[i]:Hide() end
-            r:SetHeight(math.max(h + 2, #list * step + 1))
+            inset = maxOff > 0 and 12 or 1
+            if opts.tag then
+                local w = Measure(opts.columns and opts.columns.tag)
+                for _, item in ipairs(list) do
+                    if not item.header then w = math.max(w, Measure((opts.tag(item)))) end
+                end
+                tagW = math.min(w, opts.tagWidth or 90)
+            end
+            if cols then
+                -- titles over their columns (the rows narrow with the scroll bar)
+                local nameX = grouped and ITEM_X or 8
+                if opts.checked then nameX = nameX + 20 end
+                if opts.lead == "icon" then nameX = nameX + 22
+                elseif opts.lead then nameX = nameX + 14 end
+                local right = RIGHT0 + inset - 1
+                cols.tag:ClearAllPoints()
+                cols.tag:SetPoint("RIGHT", -right, 0)
+                cols.tag:SetWidth(math.max(1, tagW))
+                if tagW > 0 then right = right + tagW + 8 end
+                local secW = math.min(Measure(cols.sec:GetText()), math.floor((rowW - 2) * 0.4))
+                cols.sec:ClearAllPoints()
+                cols.sec:SetPoint("RIGHT", -right, 0)
+                cols.sec:SetWidth(math.max(1, secW))
+                cols.sec:SetShown(secW > 0)
+                if secW > 0 then right = right + secW + 8 end
+                cols.name:ClearAllPoints()
+                cols.name:SetPoint("LEFT", nameX, 0)
+                cols.name:SetPoint("RIGHT", -right, 0)
+            end
+            -- after a group was opened or closed: where each row starts sliding
+            local slide = toggled
+            toggled = nil
+            local headerSlot = slide and ((prevPos[slide] or 1) - prevOffset)
+            local moving = false
+            for i = 1, shown do
+                local line = lines[i] or NewLine(i)
+                local idx = i + offset
+                local item = list[idx]
+                line.item, line.index = item, idx
+                if item then
+                    line.shift = 0
+                    line:SetAlpha(1)
+                    if slide then
+                        local old = prevPos[item]
+                        if old then
+                            line.shift = (old - prevOffset - i) * h
+                        else
+                            line.shift = (headerSlot - i) * h
+                            line:SetAlpha(0)
+                        end
+                        line.shift = math.max(-shown * h, math.min(shown * h, line.shift))
+                        if line.shift ~= 0 or line:GetAlpha() < 1 then moving = true end
+                    end
+                    PlaceLine(line, i, line.shift)
+                    if item.header then PaintHeader(line, item) else PaintItem(line, item, idx) end
+                    line:Show()
+                else
+                    line:Hide()
+                end
+            end
+            empty:SetShown(n == 0)
+            slider:SetScript("OnUpdate", moving and Slide or nil)
+            prevPos, prevOffset = {}, offset
+            for i, item in ipairs(list) do prevPos[item] = i end
         end
         return Register(r)
     end
@@ -1109,8 +1656,19 @@ function lib:New(theme)
     ---------------------------------------------------------------------------
     -- Card: box with a brand-color title and a line under it; its rows are
     -- stacked top to bottom. card:Add(row), card:Layout(width)
+    --   opts.fold = true  the title bar folds the card down to its title:
+    --                     the height slides, a chevron on the right turns,
+    --                     and a folded card shows a grey summary after its
+    --                     title (opts.summary() or the subtitle)
+    --   opts.store, opts.key  where the folded state is kept (store[key] =
+    --                     true while folded; pass a saved table to keep it
+    --                     after /reload; key defaults to the title)
+    --   opts.folded = true    starts folded (until store says otherwise)
     ---------------------------------------------------------------------------
-    function UI.Card(parent, title, subtitle)
+    local FOLD_TIME = 0.15
+
+    function UI.Card(parent, title, subtitle, opts)
+        opts = opts or {}
         local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
         UI.Backdrop(card, T.card, T.cardBorder)
         card.rows = {}
@@ -1132,7 +1690,8 @@ function lib:New(theme)
             return w
         end
 
-        function card:Layout(width)
+        -- rows and line under the title; returns the full height
+        local function LayoutContent(self, width)
             self:SetWidth(width)
             local inner = width - 2 * P
             local top = P + 16
@@ -1158,7 +1717,89 @@ function lib:New(theme)
                     y = y - w:GetHeight() - T.gap
                 end
             end
-            self:SetHeight(-y - T.gap + P)
+            return -y - T.gap + P
+        end
+
+        if not opts.fold then
+            function card:Layout(width)
+                self:SetHeight(LayoutContent(self, width))
+            end
+            return card
+        end
+
+        -- folding card
+        local store = opts.store or {}
+        local key = opts.key or title
+        local function Folded()
+            local v = store[key]
+            if v == nil then return opts.folded and true or false end
+            return v
+        end
+        local FOLDED_H = P * 2 + 14
+        if card.SetClipsChildren then card:SetClipsChildren(true) end   -- content slides under the edge
+        local chev = NewChevron(card, A)
+        chev:SetPoint("RIGHT", card, "TOPRIGHT", -P - 2, -P - 7)
+        card.summary = UI.Text(card, "", T.labelFont, T.muted)
+        card.summary:SetPoint("LEFT", card.title, "RIGHT", 10, 0)
+        card.summary:SetPoint("RIGHT", chev, "LEFT", -10, 0)
+        card.summary:SetWordWrap(false)
+
+        -- the title bar is the button; on hover the title and chevron brighten
+        local bar = CreateFrame("Button", nil, card)
+        bar:SetPoint("TOPLEFT", 1, -1)
+        bar:SetPoint("TOPRIGHT", -1, -1)
+        bar:SetHeight(P + 18)
+        bar:SetFrameLevel(card:GetFrameLevel() + 5)
+        local function Paint(k)
+            local r, g, b = A[1] + (1 - A[1]) * k, A[2] + (1 - A[2]) * k, A[3] + (1 - A[3]) * k
+            card.title:SetTextColor(r, g, b)
+            chev:SetColor(r, g, b)
+        end
+        bar:SetScript("OnEnter", function() Paint(0.45) end)
+        bar:SetScript("OnLeave", function() Paint(0) end)
+
+        local function Relayout()
+            if card.page then card.page:Layout() else UI.RefreshAll() end
+        end
+        bar:SetScript("OnClick", function()
+            card.animFrom, card.animT = card:GetHeight(), 0
+            store[key] = not Folded()
+            card:SetScript("OnUpdate", function(self, elapsed)
+                self.animT = self.animT + elapsed
+                if self.animT >= FOLD_TIME then
+                    self.animFrom = nil
+                    self:SetScript("OnUpdate", nil)
+                end
+                Relayout()
+            end)
+            Relayout()
+        end)
+
+        function card:Layout(width)
+            local folded = Folded()
+            local moving = self.animFrom ~= nil
+            chev:SetOpen(not folded, true)
+            self.summary:SetText(folded and ((opts.summary and opts.summary()) or subtitle or "") or "")
+            -- while sliding the content stays (clipped); hidden once folded
+            local content = not folded or moving
+            if self.subtitle then self.subtitle:SetShown(content) end
+            self.line:SetShown(content)
+            local target
+            if content then
+                local full = LayoutContent(self, width)
+                target = folded and FOLDED_H or full
+            else
+                self:SetWidth(width)
+                for _, w in ipairs(self.rows) do w:Hide() end
+                target = FOLDED_H
+            end
+            if moving then
+                local t = math.min(1, self.animT / FOLD_TIME)
+                t = 1 - (1 - t) * (1 - t)   -- ease out
+                self:SetHeight(self.animFrom + (target - self.animFrom) * t)
+            else
+                self:SetHeight(target)
+            end
         end
         return card
     end
@@ -1199,6 +1840,7 @@ function lib:New(theme)
 
         function page:Add(col, card)
             card:SetParent(self.content)
+            card.page = self   -- a folding card lays out its page while it slides
             table.insert(self.cols[col], card)
             return card
         end

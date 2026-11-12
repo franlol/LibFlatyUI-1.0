@@ -23,6 +23,13 @@ Controls: `Button`, `Buttons`, `Confirm`, `Check`, `CheckGroup`, `Switch`, `Slid
 `Card`, `Page`, `Tabs`, `Dialog`, `Window`. The header of `LibFlatyUI-1.0.lua`
 documents the options every control accepts.
 
+`List` is one widget for every list: a fixed-height box that scrolls, with
+optional icon / swatch / dot, secondary text, tag column, column titles, check
+boxes, a remove button that asks for a second click, drag to reorder, and
+groups that open and close. Long texts are cut and shown whole on hover.
+
+`Card(parent, title, subtitle, { fold = true })` folds down to its title bar.
+
 ## Embedding
 
 In your `.pkgmeta`:
