@@ -1104,7 +1104,9 @@ function lib:New(theme)
     --   opts.onSelect(i, item)
     --   opts.checked(item)         -> true | false | "partial": check box on
     --                                 each row; on a group header "partial"
-    --                                 shows a dash (some of the group)
+    --                                 shows a dash (some of the group);
+    --                                 nil: no box on that row (the space
+    --                                 stays, so the names line up)
     --   opts.onCheck(item, value)  without onSelect, a row click toggles too
     --   opts.onRemove(i, item)     red x on every row. The first click marks
     --                                 the row ("Click again to confirm", it
@@ -1112,6 +1114,8 @@ function lib:New(theme)
     --                                 second removes it. A double click does
     --                                 not count; after 3 s it goes back.
     --                                 The addon keeps its own selection right.
+    --   opts.canRemove(item)       -> false: no x on that row (built-in
+    --                                 items, children of a group...)
     --   opts.confirmRemove = false x removes at once
     --   opts.onReorder(from, to)   rows can be dragged; the others slide
     --   opts.spell(item)           -> spell ID: spell tooltip on hover
@@ -1125,6 +1129,10 @@ function lib:New(theme)
     -- close with a chevron (opts.onToggle(item) changes `closed`); the
     -- items under an open header follow it in items(). Opening and closing
     -- slides the rows.
+    -- opts.richHeaders = true: a header is a full row too (a thing that
+    -- opens to show its parts): label(), lead, secondary(), tag, check box,
+    -- x and spell tooltip like any row, with the chevron in front. A header
+    -- with leaf = true has nothing to open (no chevron).
     -- Texts that do not fit end in "..." and show whole on hover. The name
     -- keeps at least 80 px; the secondary takes at most 40% of the row.
     ---------------------------------------------------------------------------
@@ -1394,6 +1402,7 @@ function lib:New(theme)
                 end
                 if not item then return end
                 if item.header then
+                    if item.leaf then return end
                     toggled = item   -- the next refresh slides the rows
                     if opts.onToggle then opts.onToggle(item) end
                     Changed()
@@ -1401,13 +1410,14 @@ function lib:New(theme)
                     opts.onSelect(self.index, item)
                     Changed()
                 elseif opts.checked then
-                    Toggle(item, opts.checked(item) ~= true)
+                    local state = opts.checked(item)
+                    if state ~= nil then Toggle(item, state ~= true) end
                 end
             end)
             -- tooltip: the spell, and the full texts when they were cut
             line:SetScript("OnEnter", function(self)
                 if not self.item then return end
-                local id = not self.item.header and opts.spell and opts.spell(self.item)
+                local id = (not self.item.header or opts.richHeaders) and opts.spell and opts.spell(self.item)
                 if not id and not self.cut then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 if id then
@@ -1436,11 +1446,13 @@ function lib:New(theme)
             return line
         end
 
-        -- check box at x; returns where the next piece starts
+        -- check box at x; returns where the next piece starts (a row without
+        -- a box keeps its space, so the names line up)
         local function PaintCheck(line, item, x)
             local c = line.check
             if not c then return x end
             local state = opts.checked(item)
+            c:SetShown(state ~= nil)
             c:ClearAllPoints()
             c:SetPoint("LEFT", x, 0)
             c.mark:SetPartial(state == "partial")
@@ -1503,12 +1515,13 @@ function lib:New(theme)
             if item.off then line.name:SetTextColor(0.45, 0.45, 0.45)
             else line.name:SetTextColor(0.85, 0.85, 0.88) end
             line.sec:SetTextColor(0.5, 0.5, 0.55)
-            if line.check then line.check:Show() end
             Fit(line, PaintCheck(line, item, HEADER_X), item.count, nil, false)
             if line.remove then line.remove:Hide() end
         end
 
+        -- a row; with opts.richHeaders also a group header (chevron in front)
         local function PaintItem(line, item, i)
+            local head = item.header
             local on = IsSelected(item, i)
             local doomed = armed == item
             if doomed then
@@ -1517,10 +1530,17 @@ function lib:New(theme)
                 line.bg:SetColorTexture(A[1], A[2], A[3], on and 0.22 or 0)
             end
             line.bar:SetShown(on)
-            line.exp:Hide()
-            line.sep:Hide()
-            if line.check then line.check:Show() end
-            local x = PaintCheck(line, item, grouped and ITEM_X or 8)
+            if head then
+                local same = line.expItem == item
+                line.expItem = item
+                line.exp:SetOpen(not item.closed, same)
+                line.exp:SetShown(not item.leaf)
+                line.sep:SetShown(line.index > 1)
+            else
+                line.exp:Hide()
+                line.sep:Hide()
+            end
+            local x = PaintCheck(line, item, head and HEADER_X or (grouped and ITEM_X or 8))
             local lead = line.lead
             lead:ClearAllPoints()
             lead:SetTexCoord(0, 1, 0, 1)
@@ -1561,7 +1581,7 @@ function lib:New(theme)
                 local b = line.remove
                 b.borderColor = doomed and { T.danger[1], T.danger[2], T.danger[3], 1 } or T.border
                 b:SetBackdropBorderColor(unpack(b.borderColor))
-                b:Show()
+                b:SetShown(not opts.canRemove or opts.canRemove(item) and true or false)
             end
             if opts.decorate then opts.decorate(line, item, i) end
         end
@@ -1640,7 +1660,8 @@ function lib:New(theme)
                         if line.shift ~= 0 or line:GetAlpha() < 1 then moving = true end
                     end
                     PlaceLine(line, i, line.shift)
-                    if item.header then PaintHeader(line, item) else PaintItem(line, item, idx) end
+                    if item.header and not opts.richHeaders then PaintHeader(line, item)
+                    else PaintItem(line, item, idx) end
                     line:Show()
                 else
                     line:Hide()
