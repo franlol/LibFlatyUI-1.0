@@ -3,7 +3,7 @@
 Flat, dark controls for addon settings windows, built only from plain frames,
 textures and font strings, so the look does not change between game versions.
 
-Used by [Sigil](https://github.com/franlol/Sigil) and [Tidy](https://github.com/franlol/Tidy).
+Used by [Sigil](https://github.com/franlol/Sigil), [Tidy](https://github.com/franlol/Tidy) and [Tile](https://github.com/franlol/Tile).
 
 ## Usage
 

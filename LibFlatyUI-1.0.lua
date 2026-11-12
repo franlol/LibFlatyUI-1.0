@@ -1115,7 +1115,8 @@ function lib:New(theme)
     --   opts.confirmRemove = false x removes at once
     --   opts.onReorder(from, to)   rows can be dragged; the others slide
     --   opts.spell(item)           -> spell ID: spell tooltip on hover
-    --   opts.empty                 text shown when there are no rows
+    --   opts.empty                 text shown when there are no rows (or a
+    --                                 function that returns it)
     --   opts.rows                  visible rows (default 8)
     --   opts.rowHeight             default 20
     --   opts.decorate(row, item, i) extra pieces per row (row.name, alias
@@ -1206,7 +1207,7 @@ function lib:New(theme)
             r.Refresh()
         end)
 
-        local empty = UI.Text(r, opts.empty or "", T.labelFont, T.muted)
+        local empty = UI.Text(r, "", T.labelFont, T.muted)
         empty:SetPoint("LEFT", 12, -hh / 2)
         empty:SetPoint("RIGHT", -12, -hh / 2)
         empty:SetJustifyH("CENTER")
@@ -1645,6 +1646,11 @@ function lib:New(theme)
                     line:Hide()
                 end
             end
+            if n == 0 then
+                local e = opts.empty
+                if type(e) == "function" then e = e() end
+                empty:SetText(e or "")
+            end
             empty:SetShown(n == 0)
             slider:SetScript("OnUpdate", moving and Slide or nil)
             prevPos, prevOffset = {}, offset
@@ -1703,6 +1709,7 @@ function lib:New(theme)
             self.line:SetPoint("TOPLEFT", P, -(top + 2))
             self.line:SetPoint("TOPRIGHT", -P, -(top + 2))
             local y = -(top + 10)
+            local first = true
             for _, w in ipairs(self.rows) do
                 local visible = not w.showIf or w.showIf()
                 w:SetShown(visible)
@@ -1711,7 +1718,9 @@ function lib:New(theme)
                     w:SetWidth(inner)
                     if w.OnWidth then w.OnWidth(inner) end
                     -- a sub-option sits close under the row it depends on
-                    if w.sub then y = y + T.gap - T.subGap end
+                    -- (not under the title, when that row is hidden)
+                    if w.sub and not first then y = y + T.gap - T.subGap end
+                    first = false
                     w:ClearAllPoints()
                     w:SetPoint("TOPLEFT", P, y)
                     y = y - w:GetHeight() - T.gap
