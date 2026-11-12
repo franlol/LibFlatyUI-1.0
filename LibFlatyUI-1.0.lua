@@ -33,7 +33,7 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 9
+local MAJOR, MINOR = "LibFlatyUI-1.0", 10
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -1837,13 +1837,17 @@ function lib:New(theme)
     ---------------------------------------------------------------------------
     -- Page: vertical scroll area with columns of cards.
     -- page:Add(column, card), page:Layout(). A card with card.showIf hides.
+    -- The cards take the whole width; only while the page scrolls they make
+    -- room on the right for the scroll bar.
     ---------------------------------------------------------------------------
+    local BAR_ROOM = 12   -- scroll bar (8) and the space around it
+
     function UI.Page(parent, columns)
         local page = CreateFrame("Frame", nil, parent)
         page:SetAllPoints()
         local sf = CreateFrame("ScrollFrame", nil, page)
         sf:SetPoint("TOPLEFT")
-        sf:SetPoint("BOTTOMRIGHT", -12, 0)
+        sf:SetPoint("BOTTOMRIGHT")
         local content = CreateFrame("Frame", nil, sf)
         content:SetSize(10, 10)
         sf:SetScrollChild(content)
@@ -1875,9 +1879,8 @@ function lib:New(theme)
             return card
         end
 
-        function page:Layout()
-            local w = sf:GetWidth()
-            if w <= 0 then return end
+        -- lays the cards out in a width; returns the height they take
+        local function Place(self, w)
             content:SetWidth(w)
             local gap = T.gap
             local n = #self.cols
@@ -1897,12 +1900,44 @@ function lib:New(theme)
                 end
                 low = math.min(low, y)
             end
-            content:SetHeight(-low + 4)
+            -- the last card has no gap under it
+            return math.max(0, -low - gap)
+        end
+
+        local busy
+        function page:Layout()
+            local w, view = page:GetWidth(), page:GetHeight()
+            if w <= 0 or busy then return end
+            busy = true
+            -- full width first; if it does not fit, again with room for the bar
+            local h = Place(self, w)
+            local scrolls = h > view
+            if scrolls then h = Place(self, w - BAR_ROOM) end
+            sf:SetPoint("BOTTOMRIGHT", scrolls and -BAR_ROOM or 0, 0)
+            -- scrolled to the end, a little space under the last card
+            content:SetHeight(scrolls and h + T.gap + 4 or h)
+            busy = false
             UpdateBar()
         end
-        sf:SetScript("OnSizeChanged", function() page:Layout() end)
+        page:SetScript("OnSizeChanged", function() page:Layout() end)
         table.insert(UI.pages, page)
         return page
+    end
+
+    ---------------------------------------------------------------------------
+    -- Split: two one-column pages side by side, a fixed-width one on the left
+    -- (usually a list to pick from) and the rest on the right, with the same
+    -- gap as between cards. Returns leftPage, rightPage.
+    ---------------------------------------------------------------------------
+    function UI.Split(parent, leftWidth)
+        local left = CreateFrame("Frame", nil, parent)
+        left:SetPoint("TOPLEFT")
+        left:SetPoint("BOTTOMLEFT")
+        left:SetWidth(leftWidth)
+        local right = CreateFrame("Frame", nil, parent)
+        right:SetPoint("TOPLEFT", left, "TOPRIGHT", T.gap, 0)
+        right:SetPoint("BOTTOMRIGHT")
+        return UI.Page(left, 1), UI.Page(right, 1)
     end
 
     ---------------------------------------------------------------------------

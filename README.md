@@ -20,7 +20,7 @@ win:Select("general")
 
 Controls: `Button`, `Buttons`, `Confirm`, `Check`, `CheckGroup`, `Switch`, `Slider`,
 `Segmented`, `Dropdown`, `Swatch`, `Input`, `SearchBox`, `CodeBox`, `Note`, `List`,
-`Card`, `Page`, `Tabs`, `Dialog`, `Window`. The header of `LibFlatyUI-1.0.lua`
+`Card`, `Page`, `Split`, `Tabs`, `Dialog`, `Window`. The header of `LibFlatyUI-1.0.lua`
 documents the options every control accepts.
 
 `List` is one widget for every list: a fixed-height box that scrolls, with
