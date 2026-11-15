@@ -33,7 +33,7 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 10
+local MAJOR, MINOR = "LibFlatyUI-1.0", 11
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -1402,7 +1402,7 @@ function lib:New(theme)
                     return
                 end
                 if not item then return end
-                if item.header then
+                if type(item) == "table" and item.header then
                     if item.leaf then return end
                     toggled = item   -- the next refresh slides the rows
                     if opts.onToggle then opts.onToggle(item) end
@@ -1418,7 +1418,7 @@ function lib:New(theme)
             -- tooltip: the spell, and the full texts when they were cut
             line:SetScript("OnEnter", function(self)
                 if not self.item then return end
-                local id = (not self.item.header or opts.richHeaders) and opts.spell and opts.spell(self.item)
+                local id = (not (type(self.item) == "table" and self.item.header) or opts.richHeaders) and opts.spell and opts.spell(self.item)
                 if not id and not self.cut then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 if id then
@@ -1435,7 +1435,7 @@ function lib:New(theme)
             if opts.onReorder then
                 line:SetScript("OnMouseDown", function(self, button)
                     self.justDropped = nil
-                    if button ~= "LeftButton" or not self.item or self.item.header then return end
+                    if button ~= "LeftButton" or not self.item or (type(self.item) == "table" and self.item.header) then return end
                     press = { line = self, y = CursorY() }
                     r:SetScript("OnUpdate", Watch)
                 end)
@@ -1522,7 +1522,7 @@ function lib:New(theme)
 
         -- a row; with opts.richHeaders also a group header (chevron in front)
         local function PaintItem(line, item, i)
-            local head = item.header
+            local head = type(item) == "table" and item.header
             local on = IsSelected(item, i)
             local doomed = armed == item
             if doomed then
@@ -1605,13 +1605,13 @@ function lib:New(theme)
             bar:SetPos(offset)
             grouped = false
             for _, item in ipairs(list) do
-                if item.header then grouped = true break end
+                if type(item) == "table" and item.header then grouped = true break end
             end
             inset = maxOff > 0 and 12 or 1
             if opts.tag then
                 local w = Measure(opts.columns and opts.columns.tag)
                 for _, item in ipairs(list) do
-                    if not item.header then w = math.max(w, Measure((opts.tag(item)))) end
+                    if not (type(item) == "table" and item.header) then w = math.max(w, Measure((opts.tag(item)))) end
                 end
                 tagW = math.min(w, opts.tagWidth or 90)
             end
@@ -1661,7 +1661,7 @@ function lib:New(theme)
                         if line.shift ~= 0 or line:GetAlpha() < 1 then moving = true end
                     end
                     PlaceLine(line, i, line.shift)
-                    if item.header and not opts.richHeaders then PaintHeader(line, item)
+                    if type(item) == "table" and item.header and not opts.richHeaders then PaintHeader(line, item)
                     else PaintItem(line, item, idx) end
                     line:Show()
                 else
