@@ -916,12 +916,16 @@ function lib:New(theme)
         r.label:SetPoint("LEFT", s, "RIGHT", 6, 0)
         s:SetScript("OnEnter", function(self) Hover(self, true) end)
         s:SetScript("OnLeave", function(self) Hover(self, false) end)
+        -- no color (nothing saved yet): the swatch shows empty, the rest of
+        -- the window keeps refreshing
         r.Refresh = function()
             local c = getColor()
-            s:SetBackdropColor(c.r, c.g, c.b, 1)
+            if c then s:SetBackdropColor(c.r, c.g, c.b, 1) else s:SetBackdropColor(0, 0, 0, 0) end
         end
         s:SetScript("OnClick", function()
-            OpenColorPicker(getColor(), opts.alpha, function()
+            local c = getColor()
+            if not c then return end
+            OpenColorPicker(c, opts.alpha, function()
                 r.Refresh()
                 if onChange then onChange() end
             end)
