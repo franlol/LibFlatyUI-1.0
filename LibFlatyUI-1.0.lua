@@ -33,7 +33,7 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 11
+local MAJOR, MINOR = "LibFlatyUI-1.0", 12
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -703,8 +703,8 @@ function lib:New(theme)
     ---------------------------------------------------------------------------
     -- Dropdown: label above, button below; the list scrolls when long.
     -- options = { { value, label, font, texture }, ... } or a function that
-    -- returns it. With font, the option is drawn in that font; with texture,
-    -- a sample of it is shown behind the option.
+    -- returns it. With font, the option is drawn in that font; with texture
+    -- (a file path or an atlas name), a sample of it is shown behind the option.
     ---------------------------------------------------------------------------
     local MAX_ITEMS = 14
 
@@ -731,7 +731,13 @@ function lib:New(theme)
             frame.preview:SetPoint("BOTTOMRIGHT", -1, 1)
             frame.preview:SetVertexColor(A[1] * 0.6, A[2] * 0.6, A[3] * 0.6, 1)
         end
-        if tex then frame.preview:SetTexture(tex) end
+        if tex then
+            if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(tex) then
+                frame.preview:SetAtlas(tex)
+            else
+                frame.preview:SetTexture(tex)
+            end
+        end
         frame.preview:SetShown(tex ~= nil)
     end
 
