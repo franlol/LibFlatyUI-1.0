@@ -23,7 +23,7 @@ one, and the design rules. The [Flaty Gallery](https://github.com/franlol/FlatyG
 in every state. Working on the lib: see [AGENTS.md](AGENTS.md).
 
 Controls: `Button`, `Buttons`, `IconButton`, `Menu`, `Confirm`, `Check`, `CheckGroup`, `Switch`,
-`Slider`, `Segmented`, `Dropdown`, `Swatch`, `Input`, `SearchBox`, `CodeBox`, `Note`,
+`Slider`, `Segmented`, `Tiles`, `Dropdown`, `Swatch`, `Input`, `SearchBox`, `CodeBox`, `Note`,
 `Heading`, `Separator`, `List`,
 `Card`, `Page`, `Split`, `Tabs`, `Dialog`, `Window`. The header of `LibFlatyUI-1.0.lua`
 documents the options every control accepts.

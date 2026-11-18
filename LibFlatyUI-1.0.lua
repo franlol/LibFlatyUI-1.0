@@ -37,7 +37,7 @@
 -------------------------------------------------------------------------------
 
 local LOADER = ...   -- the addon whose TOC loads this file (for the media path)
-local MAJOR, MINOR = "LibFlatyUI-1.0", 16
+local MAJOR, MINOR = "LibFlatyUI-1.0", 17
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -1059,6 +1059,98 @@ function lib:New(theme)
                 end
                 b:SetBackdropBorderColor(unpack(b.borderColor))
             end
+        end
+        return Register(r)
+    end
+
+    ---------------------------------------------------------------------------
+    -- Tiles: exclusive options shown as pictures (shapes, styles), each with
+    -- its name under it, spread across the row.
+    -- options = { { value, label, texture }, ... } or a function that returns
+    -- it. texture: a file or an atlas; grey, and the brand color when picked.
+    -- opts.size: the tile's side (default 40)
+    ---------------------------------------------------------------------------
+    function UI.Tiles(parent, label, options, get, set, opts)
+        opts = opts or {}
+        opts.label = label
+        local size = opts.size or 40
+        local top = label and -16 or 0
+        local r = Row(parent, (label and 16 or 0) + size + 18, opts)
+        if label then
+            r.label = UI.Text(r, label)
+            r.label:SetPoint("TOPLEFT")
+        end
+        r.tiles = {}
+        local width = 200
+
+        local function List()
+            return type(options) == "function" and options() or options
+        end
+        local function Paint(t, picked)
+            local c = picked and A or T.muted
+            t.borderColor = picked and { A[1], A[2], A[3], 1 } or T.border
+            t:SetBackdropBorderColor(unpack(t.borderColor))
+            t.pic:SetVertexColor(c[1], c[2], c[3], 1)
+            t.name:SetTextColor(unpack(picked and T.text or T.muted))
+        end
+        local function Tile(i)
+            local t = r.tiles[i]
+            if t then return t end
+            t = CreateFrame("Button", nil, r, "BackdropTemplate")
+            t:SetSize(size, size)
+            UI.Backdrop(t, T.field, T.border)
+            t.pic = t:CreateTexture(nil, "ARTWORK")
+            t.pic:SetPoint("TOPLEFT", 6, -6)
+            t.pic:SetPoint("BOTTOMRIGHT", -6, 6)
+            t.name = UI.Text(r, "")
+            t.name:SetJustifyH("CENTER")
+            t.name:SetWordWrap(false)
+            t.name:SetPoint("TOP", t, "BOTTOM", 0, -3)
+            t:SetScript("OnClick", function(self)
+                set(self.value)
+                r.Refresh()
+                Changed()
+            end)
+            t:SetScript("OnEnter", function(self) Hover(self, true) end)
+            t:SetScript("OnLeave", function(self) Hover(self, false) end)
+            r.tiles[i] = t
+            return t
+        end
+        -- one cell per option, the tile in its middle
+        local function Place()
+            local n = #List()
+            local cell = width / math.max(n, 1)
+            for i = 1, n do
+                local t = r.tiles[i]
+                t:ClearAllPoints()
+                t:SetPoint("TOP", r, "TOPLEFT", cell * (i - 0.5), top)
+                t.name:SetWidth(cell - 4)
+            end
+        end
+        r.OnWidth = function(w)
+            width = w
+            Place()
+        end
+        r.Refresh = function()
+            local list, cur = List(), get()
+            for i, o in ipairs(list) do
+                local t = Tile(i)
+                t.value = o[1]
+                t.name:SetText(o[2])
+                if o[3] and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(o[3]) then
+                    t.pic:SetAtlas(o[3])
+                else
+                    t.pic:SetTexture(o[3])
+                end
+                Paint(t, o[1] == cur)
+                t:Show()
+                t.name:Show()
+            end
+            for i = #list + 1, #r.tiles do
+                r.tiles[i]:Hide()
+                r.tiles[i].name:Hide()
+            end
+            Place()
         end
         return Register(r)
     end

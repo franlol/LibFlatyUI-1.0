@@ -55,7 +55,7 @@ win:Select("general")
 | One choice of 2 or 3 | `Segmented` | `Dropdown` |
 | One choice of 4 or more, or a list that changes | `Dropdown` | `Segmented` |
 | A font or texture | `Dropdown` with `UI.MediaList(kind)` | your own list of paths |
-| A shape (minimap, portrait) | `Dropdown` with `UI.ShapeList` | |
+| One choice that is best seen (a shape, a style) | `Tiles` | `Dropdown` with names only |
 | A color | `Swatch` | |
 | A short text (name, label) | `Input` | `CodeBox` |
 | Long or multi-line text (code, import string) | `CodeBox` | `Input` |
@@ -196,6 +196,12 @@ text. No mouse wheel, so the page keeps scrolling.
 
 **`UI.Segmented(parent, label, options, get, set, opts)`**: 2 or 3 exclusive
 choices side by side. `options = { { value, label }, ... }`. `label` can be nil.
+
+**`UI.Tiles(parent, label, options, get, set, opts)`**: exclusive choices shown
+as pictures with their name under them, spread across the row (shapes,
+styles). `options = { { value, label, texture }, ... }` or a function that
+returns it; `texture` is a file or atlas, grey and the brand color when picked.
+`opts.size` is the tile's side (40).
 
 **`UI.Dropdown(parent, label, options, get, set, opts)`**: a list of choices.
 `options = { { value, label, font, texture }, ... }` or a function that
