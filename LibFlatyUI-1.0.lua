@@ -33,7 +33,7 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 13
+local MAJOR, MINOR = "LibFlatyUI-1.0", 14
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -163,6 +163,51 @@ local function NewChevron(parent, color)
         end
     end)
     f:SetColor(color[1], color[2], color[3])
+    return f
+end
+
+-- Small flat glyph for icon buttons, drawn from bars like the tick:
+-- "plus", "minus", "close", "more", "up", "down", "left", "right".
+-- g = size of the glyph box. f:SetColor(r, g, b)
+local GLYPHS = { plus = true, minus = true, close = true, more = true, up = true, down = true, left = true, right = true }
+local function NewGlyph(parent, kind, g)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetSize(g, g)
+    f:SetPoint("CENTER")
+    f.bars = {}
+    local function Bar(w, h, x, y, deg)
+        local t = f:CreateTexture(nil, "OVERLAY")
+        t:SetSize(w, h)
+        t:SetPoint("CENTER", x, y)
+        if deg then t:SetRotation(math.rad(deg)) end
+        table.insert(f.bars, t)
+        return t
+    end
+    if kind == "plus" then
+        Bar(g, 2, 0, 0)
+        Bar(2, g, 0, 0)
+    elseif kind == "minus" then
+        Bar(g, 2, 0, 0)
+    elseif kind == "close" then
+        Bar(g * 1.2, 2, 0, 0, 45)
+        Bar(g * 1.2, 2, 0, 0, -45)
+    elseif kind == "more" then
+        local s = math.max(3, math.floor(g / 3 + 0.5))
+        for _, x in ipairs({ -s, 0, s }) do Bar(2, 2, x, 0) end
+    else
+        -- chevron pointing right, turned to its direction (same shape as
+        -- the fold chevron, scaled to the box)
+        local th = math.rad(({ right = 0, down = -90, left = 180, up = 90 })[kind])
+        local c, s = math.cos(th), math.sin(th)
+        local len, off = 0.64 * g, 0.2 * g
+        for _, p in ipairs({ { off, -45 }, { -off, 45 } }) do
+            local y, deg = p[1], p[2]
+            Bar(len, 2, -y * s, y * c, deg + math.deg(th))
+        end
+    end
+    function f:SetColor(r, gr, b)
+        for _, t in ipairs(self.bars) do t:SetColorTexture(r, gr, b, 1) end
+    end
     return f
 end
 
@@ -342,6 +387,66 @@ function lib:New(theme)
             end
         end
         return r
+    end
+
+    ---------------------------------------------------------------------------
+    -- Icon button: a small square button with a drawn glyph ("plus",
+    -- "minus", "close", "more", "up", "down", "left", "right") or any
+    -- texture (file path or atlas name) for the rest.
+    --   size        default 16 (20 fits next to 20 px controls)
+    --   opts.tip    tooltip text
+    --   opts.style  "danger": glyph in the danger color
+    --   opts.isOn() -> true: lit with the accent, like a selected option
+    --                  (a toggle: lock, eye...); refreshed with the others
+    ---------------------------------------------------------------------------
+    local GLYPH_COLOR = { 0.8, 0.8, 0.84 }
+
+    function UI.IconButton(parent, icon, size, onClick, opts)
+        opts = opts or {}
+        size = size or 16
+        local b = UI.Button(parent, "", size, size, onClick)
+        local danger = opts.style == "danger"
+        local base = danger and T.danger or GLYPH_COLOR
+        if GLYPHS[icon] then
+            b.glyph = NewGlyph(b, icon, math.floor(size * 0.5 + 0.5))
+            b.glyph:SetFrameLevel(b:GetFrameLevel() + 1)
+            b.glyph:SetColor(unpack(base, 1, 3))
+            -- hover: the glyph brightens with the border
+            b:HookScript("OnEnter", function()
+                if not danger then b.glyph:SetColor(unpack(T.text, 1, 3)) end
+            end)
+            b:HookScript("OnLeave", function()
+                if not (danger or (opts.isOn and opts.isOn())) then b.glyph:SetColor(unpack(base, 1, 3)) end
+            end)
+        else
+            b.icon = b:CreateTexture(nil, "ARTWORK")
+            b.icon:SetPoint("TOPLEFT", 2, -2)
+            b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+            if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(icon) then
+                b.icon:SetAtlas(icon)
+            else
+                b.icon:SetTexture(icon)
+            end
+        end
+        if opts.tip then UI.Tip(b, opts.tip) end
+        if opts.isOn then
+            b.Refresh = function()
+                local on = opts.isOn()
+                if on then
+                    b.borderColor = { A[1], A[2], A[3], 1 }
+                    b:SetBackdropColor(A[1] * 0.3, A[2] * 0.3, A[3] * 0.3, 1)
+                else
+                    b.borderColor = T.border
+                    b:SetBackdropColor(unpack(T.button))
+                end
+                b:SetBackdropBorderColor(unpack(b.borderColor))
+                if b.glyph and not danger then
+                    b.glyph:SetColor(unpack((on or b:IsMouseOver()) and T.text or base, 1, 3))
+                end
+            end
+            Register(b)
+        end
+        return b
     end
 
     ---------------------------------------------------------------------------
@@ -1093,6 +1198,42 @@ function lib:New(theme)
     end
 
     ---------------------------------------------------------------------------
+    -- Dividers inside a card. Separator: a thin line between groups of rows.
+    -- Heading: a small grey title with the line after it, a little more
+    -- space above. A card hides a divider that would sit alone: a heading
+    -- with no visible row under it (before the next divider), a separator
+    -- also with none above it.
+    ---------------------------------------------------------------------------
+    local function DividerLine(r)
+        local line = r:CreateTexture(nil, "ARTWORK")
+        line:SetHeight(1)
+        line:SetColorTexture(unpack(T.cardBorder))
+        return line
+    end
+
+    function UI.Separator(parent, opts)
+        local r = Row(parent, 9, opts)
+        r.divider = "line"
+        r.line = DividerLine(r)
+        r.line:SetPoint("LEFT", 0, 0)
+        r.line:SetPoint("RIGHT", 0, 0)
+        return r
+    end
+
+    function UI.Heading(parent, text, opts)
+        local r = Row(parent, 14, opts)
+        r.divider = "heading"
+        r.spaceAbove = 6
+        r.text = UI.Text(r, text, T.labelFont, T.muted)
+        r.text:SetPoint("LEFT")
+        r.text:SetWordWrap(false)
+        r.line = DividerLine(r)
+        r.line:SetPoint("LEFT", r.text, "RIGHT", 8, 0)
+        r.line:SetPoint("RIGHT")
+        return r
+    end
+
+    ---------------------------------------------------------------------------
     -- List: one widget for every list. A dark box that always shows `rows`
     -- rows (it does not shrink to its content) and scrolls when longer.
     --
@@ -1729,6 +1870,26 @@ function lib:New(theme)
             return w
         end
 
+        -- Icon buttons on the right of the title, right to left (on a
+        -- folding card, before the chevron; they stay while folded).
+        -- Same arguments as UI.IconButton, size 16.
+        function card:AddHeaderButton(icon, onClick, bopts)
+            local b = UI.IconButton(self, icon, 16, onClick, bopts)
+            b:SetFrameLevel(self:GetFrameLevel() + 6)
+            if self.lastHeaderButton then
+                b:SetPoint("RIGHT", self.lastHeaderButton, "LEFT", -4, 0)
+            elseif self.chev then
+                b:SetPoint("RIGHT", self.chev, "LEFT", -8, 0)
+            else
+                b:SetPoint("RIGHT", self, "TOPRIGHT", -P, -P - 7)
+            end
+            self.lastHeaderButton = b
+            if self.summary then
+                self.summary:SetPoint("RIGHT", b, "LEFT", -10, 0)
+            end
+            return b
+        end
+
         -- rows and line under the title; returns the full height
         local function LayoutContent(self, width)
             self:SetWidth(width)
@@ -1743,8 +1904,27 @@ function lib:New(theme)
             self.line:SetPoint("TOPRIGHT", -P, -(top + 2))
             local y = -(top + 10)
             local first = true
-            for _, w in ipairs(self.rows) do
-                local visible = not w.showIf or w.showIf()
+            local rows, vis = self.rows, {}
+            for i, w in ipairs(rows) do vis[i] = (not w.showIf or w.showIf()) and true or false end
+            -- no divider alone: a heading needs a visible row under it, a
+            -- separator also one above it
+            local above = false
+            for i, w in ipairs(rows) do
+                if w.divider then
+                    if vis[i] then
+                        local below = false
+                        for k = i + 1, #rows do
+                            if rows[k].divider then break end
+                            if vis[k] then below = true break end
+                        end
+                        vis[i] = below and (w.divider == "heading" or above)
+                    end
+                elseif vis[i] then
+                    above = true
+                end
+            end
+            for i, w in ipairs(rows) do
+                local visible = vis[i]
                 w:SetShown(visible)
                 if visible then
                     if w.enableIf then UI.SetEnabled(w, w.enableIf() and true or false) end
@@ -1753,6 +1933,7 @@ function lib:New(theme)
                     -- a sub-option sits close under the row it depends on
                     -- (not under the title, when that row is hidden)
                     if w.sub and not first then y = y + T.gap - T.subGap end
+                    if w.spaceAbove and not first then y = y - w.spaceAbove end
                     first = false
                     w:ClearAllPoints()
                     w:SetPoint("TOPLEFT", P, y)
@@ -1781,6 +1962,7 @@ function lib:New(theme)
         if card.SetClipsChildren then card:SetClipsChildren(true) end   -- content slides under the edge
         local chev = NewChevron(card, A)
         chev:SetPoint("RIGHT", card, "TOPRIGHT", -P - 2, -P - 7)
+        card.chev = chev
         card.summary = UI.Text(card, "", T.labelFont, T.muted)
         card.summary:SetPoint("LEFT", card.title, "RIGHT", 10, 0)
         card.summary:SetPoint("RIGHT", chev, "LEFT", -10, 0)
@@ -1851,8 +2033,13 @@ function lib:New(theme)
     -- page:Add(column, card), page:Layout(). A card with card.showIf hides.
     -- The cards take the whole width; only while the page scrolls they make
     -- room on the right for the scroll bar.
+    -- page:AddSection(label) starts a section: a title (or, with no label,
+    -- just a line) across every column; the cards added after it go below,
+    -- the columns starting level again. A section with no visible card
+    -- hides its title.
     ---------------------------------------------------------------------------
     local function BarRoom() return 1 + 8 + T.pad end   -- edge, scroll bar, space to the cards
+    local SECTION_SPACE = 8   -- extra space above a section title (not at the top)
 
     function UI.Page(parent, columns)
         local page = CreateFrame("Frame", nil, parent)
@@ -1864,8 +2051,14 @@ function lib:New(theme)
         content:SetSize(10, 10)
         sf:SetScrollChild(content)
         page.content = content
-        page.cols = {}
-        for i = 1, columns or 2 do page.cols[i] = {} end
+        local nCols = columns or 2
+        local function NewBand(head)
+            local band = { head = head, cols = {} }
+            for i = 1, nCols do band.cols[i] = {} end
+            return band
+        end
+        page.bands = { NewBand(nil) }
+        page.cols = page.bands[1].cols   -- columns of the current section
 
         local bar = UI.ScrollBar(page, function(v) sf:SetVerticalScroll(v) end)
         bar:SetPoint("TOPRIGHT", -1, 0)
@@ -1891,29 +2084,69 @@ function lib:New(theme)
             return card
         end
 
+        function page:AddSection(label)
+            local head = CreateFrame("Frame", nil, content)
+            head:SetHeight(label and 16 or 1)
+            head.line = head:CreateTexture(nil, "ARTWORK")
+            head.line:SetHeight(1)
+            head.line:SetColorTexture(1, 1, 1, 0.12)
+            head.line:SetPoint("RIGHT")
+            if label then
+                head.text = UI.Text(head, label, T.titleFont, { 0.85, 0.85, 0.88 })
+                head.text:SetPoint("LEFT")
+                head.text:SetWordWrap(false)
+                head.line:SetPoint("LEFT", head.text, "RIGHT", 10, 0)
+            else
+                head.line:SetPoint("LEFT")
+            end
+            local band = NewBand(head)
+            table.insert(self.bands, band)
+            self.cols = band.cols
+            return head
+        end
+
         -- lays the cards out in a width; returns the height they take
         local function Place(self, w)
             content:SetWidth(w)
             local gap = T.cardGap
-            local n = #self.cols
-            local cw = math.floor((w - (n - 1) * gap) / n)
-            local low = 0
-            for i, col in ipairs(self.cols) do
-                local y = 0
-                for _, card in ipairs(col) do
-                    local visible = not card.showIf or card.showIf()
-                    card:SetShown(visible)
-                    if visible then
-                        card:Layout(cw)
-                        card:ClearAllPoints()
-                        card:SetPoint("TOPLEFT", (i - 1) * (cw + gap), y)
-                        y = y - card:GetHeight() - gap
+            local cw = math.floor((w - (nCols - 1) * gap) / nCols)
+            local y = 0
+            for _, band in ipairs(self.bands) do
+                local vis, any = {}, false
+                for _, col in ipairs(band.cols) do
+                    for _, card in ipairs(col) do
+                        vis[card] = (not card.showIf or card.showIf()) and true or false
+                        if vis[card] then any = true end
                     end
                 end
-                low = math.min(low, y)
+                if band.head then
+                    band.head:SetShown(any)
+                    if any then
+                        if y < 0 then y = y - SECTION_SPACE end
+                        band.head:ClearAllPoints()
+                        band.head:SetPoint("TOPLEFT", 0, y)
+                        band.head:SetWidth(w)
+                        y = y - band.head:GetHeight() - T.gap
+                    end
+                end
+                local low = y
+                for i, col in ipairs(band.cols) do
+                    local cy = y
+                    for _, card in ipairs(col) do
+                        card:SetShown(vis[card])
+                        if vis[card] then
+                            card:Layout(cw)
+                            card:ClearAllPoints()
+                            card:SetPoint("TOPLEFT", (i - 1) * (cw + gap), cy)
+                            cy = cy - card:GetHeight() - gap
+                        end
+                    end
+                    low = math.min(low, cy)
+                end
+                y = low
             end
             -- the last card has no gap under it
-            return math.max(0, -low - gap)
+            return math.max(0, -y - gap)
         end
 
         local busy
