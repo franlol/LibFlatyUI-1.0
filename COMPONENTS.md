@@ -337,7 +337,7 @@ is registered in LibSharedMedia-3.0 when an addon loads it.
 | `statusbar` | Smooth, Gradient, Soft, Dark, Striped | Flat, Blizzard, Raid frames, Arena frames, Pet battles, Gloss, Skills |
 | `background` | Gradient up, down, left, right | Solid, Raid frames · background |
 | `border` (backdrop edge files) | Pixel, Glow, Shadow | Tooltip, Dialog |
-| `font` | Inter, Roboto Condensed, Rubik, Oswald, JetBrains Mono | Friz Quadrata, Arial Narrow, Skurri, Morpheus |
+| `font` | Inter, Roboto Condensed, Rubik, Oswald, Manrope, Nunito | Friz Quadrata, Arial Narrow, Skurri, Morpheus |
 | shapes | Square, Round, Rounded square | |
 
 All textures are white, so a color tints them (use black for a shadow). Fonts are

@@ -271,7 +271,8 @@ local OWN = {
         { "Roboto Condensed", "Fonts\\RobotoCondensed-Bold.ttf" },
         { "Rubik", "Fonts\\Rubik-Medium.ttf" },
         { "Oswald", "Fonts\\Oswald-Medium.ttf" },
-        { "JetBrains Mono", "Fonts\\JetBrainsMono-Regular.ttf" },
+        { "Manrope", "Fonts\\Manrope-SemiBold.ttf" },
+        { "Nunito", "Fonts\\Nunito-SemiBold.ttf" },
     },
 }
 

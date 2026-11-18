@@ -40,8 +40,8 @@ groups that open and close. Long texts are cut and shown whole on hover.
 ## Media
 
 A basic set that every addon gets, without SharedMedia: bar textures,
-backgrounds, border edges, five fonts (Inter, Roboto Condensed, Rubik, Oswald,
-JetBrains Mono) and shapes (square, round, rounded square) with masks and
+backgrounds, border edges, six fonts (Inter, Roboto Condensed, Rubik, Oswald,
+Manrope, Nunito) and shapes (square, round, rounded square) with masks and
 glows. Each one is named `Flaty: <name>` and registered in LibSharedMedia-3.0.
 See the Media section of [COMPONENTS.md](COMPONENTS.md#media).
 
