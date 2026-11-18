@@ -65,8 +65,7 @@ lib.defaultTheme = {
     gap = 10,              -- space between rows of a card
     cardGap = 20,          -- space between cards, columns and split panes
     subGap = 2,            -- space above a sub-option (opts.sub) under its row
-    pad = 10,              -- inner margin of a card (top and bottom)
-    padX = 14,             -- inner margin of a card (left and right)
+    pad = 10,              -- inner margin of a card
 }
 
 local function Merge(base, over)
@@ -1856,9 +1855,9 @@ function lib:New(theme)
         local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
         UI.Backdrop(card, T.card, T.cardBorder)
         card.rows = {}
-        local P, PX = T.pad, T.padX or T.pad   -- vertical, horizontal inner margin
+        local P = T.pad
         card.title = UI.Text(card, title, T.titleFont, A)
-        card.title:SetPoint("TOPLEFT", PX, -P)
+        card.title:SetPoint("TOPLEFT", P, -P)
         card.line = card:CreateTexture(nil, "ARTWORK")
         card.line:SetHeight(1)
         card.line:SetColorTexture(A[1], A[2], A[3], 0.3)
@@ -1885,7 +1884,7 @@ function lib:New(theme)
             elseif self.chev then
                 b:SetPoint("RIGHT", self.chev, "LEFT", -8, 0)
             else
-                b:SetPoint("RIGHT", self, "TOPRIGHT", -PX, -P - 7)
+                b:SetPoint("RIGHT", self, "TOPRIGHT", -P, -P - 7)
             end
             self.lastHeaderButton = b
             if self.summary then
@@ -1897,15 +1896,15 @@ function lib:New(theme)
         -- rows and line under the title; returns the full height
         local function LayoutContent(self, width)
             self:SetWidth(width)
-            local inner = width - 2 * PX
+            local inner = width - 2 * P
             local top = P + 16
             if self.subtitle then
                 self.subtitle:SetWidth(inner)
                 top = top + self.subtitle:GetStringHeight() + 4
             end
             self.line:ClearAllPoints()
-            self.line:SetPoint("TOPLEFT", PX, -(top + 2))
-            self.line:SetPoint("TOPRIGHT", -PX, -(top + 2))
+            self.line:SetPoint("TOPLEFT", P, -(top + 2))
+            self.line:SetPoint("TOPRIGHT", -P, -(top + 2))
             local y = -(top + 10)
             local first = true
             local rows, vis = self.rows, {}
@@ -1940,7 +1939,7 @@ function lib:New(theme)
                     if w.spaceAbove and not first then y = y - w.spaceAbove end
                     first = false
                     w:ClearAllPoints()
-                    w:SetPoint("TOPLEFT", PX, y)
+                    w:SetPoint("TOPLEFT", P, y)
                     y = y - w:GetHeight() - T.gap
                 end
             end
@@ -1965,7 +1964,7 @@ function lib:New(theme)
         local FOLDED_H = P * 2 + 14
         if card.SetClipsChildren then card:SetClipsChildren(true) end   -- content slides under the edge
         local chev = NewChevron(card, A)
-        chev:SetPoint("RIGHT", card, "TOPRIGHT", -PX - 2, -P - 7)
+        chev:SetPoint("RIGHT", card, "TOPRIGHT", -P - 2, -P - 7)
         card.chev = chev
         card.summary = UI.Text(card, "", T.labelFont, T.muted)
         card.summary:SetPoint("LEFT", card.title, "RIGHT", 10, 0)
