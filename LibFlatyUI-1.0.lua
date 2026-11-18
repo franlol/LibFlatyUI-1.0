@@ -2057,7 +2057,7 @@ function lib:New(theme)
         page.content = content
         local nCols = columns or 2
         local function NewBand(head)
-            local band = { head = head, cols = {} }
+            local band = { head = head, cols = {}, cards = {} }   -- cards: in the order added
             for i = 1, nCols do band.cols[i] = {} end
             return band
         end
@@ -2081,10 +2081,15 @@ function lib:New(theme)
             bar:SetPos(self:GetVerticalScroll())
         end)
 
-        function page:Add(col, card)
+        -- span: how many columns the card takes, from col to the right
+        -- (default 1)
+        function page:Add(col, card, span)
             card:SetParent(self.content)
             card.page = self   -- a folding card lays out its page while it slides
+            card.col = col
+            card.span = math.max(1, math.min(span or 1, nCols - col + 1))
             table.insert(self.cols[col], card)
+            table.insert(self.bands[#self.bands].cards, card)
             return card
         end
 
@@ -2118,11 +2123,9 @@ function lib:New(theme)
             local y = 0
             for _, band in ipairs(self.bands) do
                 local vis, any = {}, false
-                for _, col in ipairs(band.cols) do
-                    for _, card in ipairs(col) do
-                        vis[card] = (not card.showIf or card.showIf()) and true or false
-                        if vis[card] then any = true end
-                    end
+                for _, card in ipairs(band.cards) do
+                    vis[card] = (not card.showIf or card.showIf()) and true or false
+                    if vis[card] then any = true end
                 end
                 if band.head then
                     band.head:SetShown(any)
@@ -2134,20 +2137,25 @@ function lib:New(theme)
                         y = y - band.head:GetHeight() - T.gap
                     end
                 end
-                local low = y
-                for i, col in ipairs(band.cols) do
-                    local cy = y
-                    for _, card in ipairs(col) do
-                        card:SetShown(vis[card])
-                        if vis[card] then
-                            card:Layout(cw)
-                            card:ClearAllPoints()
-                            card:SetPoint("TOPLEFT", (i - 1) * (cw + gap), cy)
-                            cy = cy - card:GetHeight() - gap
-                        end
+                -- in the order added: each card goes under the lowest of the
+                -- columns it takes; a wide card levels them below it
+                local cy = {}
+                for i = 1, nCols do cy[i] = y end
+                for _, card in ipairs(band.cards) do
+                    card:SetShown(vis[card])
+                    if vis[card] then
+                        local first, last = card.col, card.col + card.span - 1
+                        local top = cy[first]
+                        for i = first + 1, last do top = math.min(top, cy[i]) end
+                        card:Layout(cw * card.span + gap * (card.span - 1))
+                        card:ClearAllPoints()
+                        card:SetPoint("TOPLEFT", (first - 1) * (cw + gap), top)
+                        local below = top - card:GetHeight() - gap
+                        for i = first, last do cy[i] = below end
                     end
-                    low = math.min(low, cy)
                 end
+                local low = y
+                for i = 1, nCols do low = math.min(low, cy[i]) end
                 y = low
             end
             -- the last card has no gap under it
