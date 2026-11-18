@@ -40,7 +40,8 @@ win:Select("general")
 - `UI.OnRefresh` (optional) runs at the end of every `RefreshAll`. Use it to
   update texts that are not controls (a card title, a note).
 - `UI.strings` holds the texts the lib shows on its own (`confirm`, `search`,
-  `accept`, `cancel`). Replace them to translate.
+  `accept`, `cancel`, `reset`). Replace them to translate, before building
+  the window.
 
 ## Picking a component
 
@@ -60,6 +61,8 @@ win:Select("general")
 | An action (reset, copy, test) | `Buttons` | a dropdown plus an Apply button |
 | A destructive action | `Buttons` with `"danger"` + `Confirm` (or `Dialog` for big ones) | a plain button |
 | A small action next to a title or in a toolbar (add, remove, more) | `IconButton` / `card:AddHeaderButton` | a text button |
+| An action with a few variants (add from a template) | a button that opens `Menu` | a `Dropdown` plus an Add button |
+| Undoing one value back to its default | `default` on the control (`Swatch`) | a Reset button per card |
 | A collection the user picks from, orders, checks or removes | `List` | many `Check` rows |
 | Explaining something the label can't say | `Note` (or `tip` on the row) | a note that repeats the label |
 | Grouping related options | `Card` | |
@@ -87,9 +90,12 @@ user asks otherwise.
 - **Every color picker has opacity** (`alpha = true`), unless the color is
   used where opacity cannot apply.
 - **Up to 3 choices: `Segmented`. More, or a list that changes: `Dropdown`.**
-- **Actions are buttons.** No "pick something, then press Apply".
+- **Actions are buttons.** No "pick something, then press Apply". An action
+  with variants opens a `Menu`.
 - **Reset and destructive actions:** `"danger"` style and `UI.Confirm` (two
-  clicks), or `UI.Dialog` when a lot is lost.
+  clicks), or `UI.Dialog` when a lot is lost. Resetting a single value (the
+  reset icon of a `Swatch` with `default`) needs no confirm: it only shows
+  when the value changed, and the value can be set again.
 - **No filler text.** No notes or tooltips that repeat the label. A subtitle or
   note must say something the controls don't.
 - **Same thing, same control.** If an option exists for several kinds of
@@ -142,11 +148,23 @@ turns to "Click again to confirm"), a second click within 3 s runs it.
 place yourself (not a row). For card rows, use `Buttons`.
 
 **`UI.IconButton(parent, icon, size, onClick, opts)`**: small square button.
-`icon` is a drawn glyph (`"plus"`, `"minus"`, `"close"`, `"more"`, `"up"`,
-`"down"`, `"left"`, `"right"`) or any texture path or atlas. Size 16 (default)
+`icon` is a drawn glyph (`"plus"`, `"minus"`, `"close"`, `"more"`, `"reset"`,
+`"up"`, `"down"`, `"left"`, `"right"`) or any texture path or atlas. Size 16 (default)
 or 20. `opts.tip`, `opts.style = "danger"`, `opts.isOn()` lights it with the
 accent (a toggle such as lock or pin). Not a row; inside a card use
 `card:AddHeaderButton` or place it in a `UI.Row`.
+
+**`UI.Menu(owner, items, onPick)`**: a list of actions that drops under any
+button. `items = { { value, label }, ... }` or a function that returns it;
+`onPick(value)` runs after it closes. Same look as a dropdown list; one open
+at a time; a click outside or on the button again closes it. Under a small
+button (an icon) it opens aligned to the button's right edge.
+
+```lua
+card:AddHeaderButton("plus", function(self)
+    UI.Menu(self, templates, AddFromTemplate)
+end, { tip = "Add" })
+```
 
 ### On / off
 
@@ -179,7 +197,9 @@ list shows its file name.
 **`UI.Swatch(parent, label, getColor, onChange, opts)`**: color box that opens
 the color picker. `getColor()` returns a `{ r, g, b, a }` table that the picker
 edits in place; `nil` shows an empty swatch that does not open.
-`opts.alpha = true` edits opacity too.
+`opts.alpha = true` edits opacity too. `opts.default = { r, g, b, a }` (or a
+function that returns it) adds a reset icon on the right of the row, shown
+only while the color differs from the default.
 
 ### Text
 

@@ -171,9 +171,10 @@ local function NewChevron(parent, color)
 end
 
 -- Small flat glyph for icon buttons, drawn from bars like the tick:
--- "plus", "minus", "close", "more", "up", "down", "left", "right".
+-- "plus", "minus", "close", "more", "reset", "up", "down", "left", "right".
 -- g = size of the glyph box. f:SetColor(r, g, b)
-local GLYPHS = { plus = true, minus = true, close = true, more = true, up = true, down = true, left = true, right = true }
+local GLYPHS = { plus = true, minus = true, close = true, more = true, reset = true,
+    up = true, down = true, left = true, right = true }
 local function NewGlyph(parent, kind, g)
     local f = CreateFrame("Frame", nil, parent)
     f:SetSize(g, g)
@@ -198,6 +199,24 @@ local function NewGlyph(parent, kind, g)
     elseif kind == "more" then
         local s = math.max(3, math.floor(g / 3 + 0.5))
         for _, x in ipairs({ -s, 0, s }) do Bar(2, 2, x, 0) end
+    elseif kind == "reset" then
+        -- circular arrow: an arc of short bars from the lower right, over the
+        -- top, to the lower left; the head at the lower right end
+        local rr, a0, a1, n = g * 0.42, -60, 210, 7
+        local step = (a1 - a0) / n
+        local chord = 2 * rr * math.sin(math.rad(step) / 2) + 1
+        for i = 0, n - 1 do
+            local m = math.rad(a0 + step * (i + 0.5))
+            Bar(chord, 2, rr * math.cos(m), rr * math.sin(m), math.deg(m) + 90)
+        end
+        local t = math.rad(a0)
+        local tx, ty = rr * math.cos(t), rr * math.sin(t)
+        local back = math.deg(t) + 90   -- from the tip back along the arc
+        local len = g * 0.45
+        for _, d in ipairs({ 45, -45 }) do
+            local w = math.rad(back + d)
+            Bar(len, 2, tx + math.cos(w) * len / 2, ty + math.sin(w) * len / 2, back + d)
+        end
     else
         -- chevron pointing right, turned to its direction (same shape as
         -- the fold chevron, scaled to the box)
@@ -851,6 +870,107 @@ function lib:New(theme)
         frame.preview:SetShown(tex ~= nil)
     end
 
+    -- The list that drops under a button (dropdowns and menus). Clicking the
+    -- same owner again closes it. list = { { value, label, font, texture }, ... }
+    -- isCurrent(value) -> true marks the current choice (and the list opens
+    -- scrolled to it); onPick(value) runs after the list closes.
+    local function OpenList(owner, list, isCurrent, onPick)
+        if lib.openMenu then
+            local was = lib.openMenu.owner
+            UI.CloseMenu()
+            if was == owner then return end
+        end
+        if #list == 0 then return end
+        local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        UI.Backdrop(menu, { 0.06, 0.06, 0.08, 1 }, { A[1], A[2], A[3], 1 })
+        menu:SetFrameStrata("FULLSCREEN_DIALOG")
+        menu:SetClampedToScreen(true)
+        menu.owner = owner
+        local shown = math.min(#list, MAX_ITEMS)
+        local width = math.max(owner:GetWidth(), 150)
+        menu:SetSize(width, shown * 18 + 4)
+        -- under the owner; a small owner (icon button) gets the list aligned
+        -- to its right edge, so it opens toward the window
+        if owner:GetWidth() < width then
+            menu:SetPoint("TOPRIGHT", owner, "BOTTOMRIGHT", 0, -1)
+        else
+            menu:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, -1)
+        end
+        menu:EnableMouse(true)
+        local offset, maxOffset = 0, math.max(0, #list - MAX_ITEMS)
+        local items, bar = {}, nil
+        local function Fill()
+            for i = 1, shown do
+                local o = list[i + offset]
+                local it = items[i]
+                it.value = o and o[1]
+                ApplyFont(it.t, o and o[3])
+                ApplyTexture(it, o and o[4])
+                it.t:SetText(o and o[2] or "")
+                it.sel:SetShown(o ~= nil and isCurrent ~= nil and isCurrent(o[1]) and true or false)
+            end
+        end
+        local function ScrollTo(v)
+            offset = math.max(0, math.min(maxOffset, math.floor(v + 0.5)))
+            Fill()
+            if bar then bar:SetPos(offset) end
+        end
+        local itemW = width - 4 - (maxOffset > 0 and 12 or 0)
+        for i = 1, shown do
+            local it = CreateFrame("Button", nil, menu)
+            it:SetSize(itemW, 18)
+            it:SetPoint("TOPLEFT", 2, -2 - (i - 1) * 18)
+            local hl = it:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.1)
+            it.sel = it:CreateTexture(nil, "ARTWORK")
+            it.sel:SetAllPoints()
+            it.sel:SetColorTexture(A[1], A[2], A[3], 0.2)
+            it.t = UI.Text(it, "")
+            it.t:SetPoint("LEFT", 4, 0)
+            it.t:SetPoint("RIGHT", -4, 0)
+            it.t:SetWordWrap(false)
+            it:SetScript("OnClick", function(self)
+                local v = self.value
+                UI.CloseMenu()
+                onPick(v)
+            end)
+            items[i] = it
+        end
+        if maxOffset > 0 then
+            bar = UI.ScrollBar(menu, ScrollTo)
+            bar:SetPoint("TOPRIGHT", -3, -3)
+            bar:SetPoint("BOTTOMRIGHT", -3, 3)
+            bar:SetRange(maxOffset, shown / #list)
+            menu:EnableMouseWheel(true)
+            menu:SetScript("OnMouseWheel", function(_, d) ScrollTo(offset - d) end)
+            if isCurrent then
+                for k, o in ipairs(list) do
+                    if isCurrent(o[1]) then ScrollTo(k - math.ceil(shown / 2)) break end
+                end
+            end
+        end
+        Fill()
+        lib.openMenu = menu
+    end
+
+    ---------------------------------------------------------------------------
+    -- Menu: a list of actions that drops under any button (an icon button
+    -- in a card header, usually). items = { { value, label }, ... } or a
+    -- function that returns it; onPick(value). Same look as a dropdown list;
+    -- one open at a time, closes on a click outside or on the button again.
+    --   card:AddHeaderButton("plus", function(self)
+    --       UI.Menu(self, templates, AddFromTemplate)
+    --   end, { tip = "Add" })
+    ---------------------------------------------------------------------------
+    function UI.Menu(owner, items, onPick)
+        if type(items) == "function" then items = items() end
+        OpenList(owner, items or {}, nil, function(v)
+            onPick(v)
+            Changed()
+        end)
+    end
+
     function UI.Dropdown(parent, label, options, get, set, opts)
         opts = opts or {}
         opts.label = label
@@ -900,76 +1020,11 @@ function lib:New(theme)
         end
 
         b:SetScript("OnClick", function()
-            if lib.openMenu then
-                local owner = lib.openMenu.owner
-                UI.CloseMenu()
-                if owner == b then return end
-            end
-            local list = Opts()
-            local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-            UI.Backdrop(menu, { 0.06, 0.06, 0.08, 1 }, { A[1], A[2], A[3], 1 })
-            menu:SetFrameStrata("FULLSCREEN_DIALOG")
-            menu:SetClampedToScreen(true)
-            menu.owner = b
-            local shown = math.min(#list, MAX_ITEMS)
-            menu:SetSize(math.max(b:GetWidth(), 150), shown * 18 + 4)
-            menu:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -1)
-            menu:EnableMouse(true)
-            local offset, maxOffset = 0, math.max(0, #list - MAX_ITEMS)
-            local items, bar = {}, nil
-            local function Fill()
-                for i = 1, shown do
-                    local o = list[i + offset]
-                    local it = items[i]
-                    it.value = o and o[1]
-                    ApplyFont(it.t, o and o[3])
-                    ApplyTexture(it, o and o[4])
-                    it.t:SetText(o and o[2] or "")
-                    it.sel:SetShown(o ~= nil and o[1] == get())
-                end
-            end
-            local function ScrollTo(v)
-                offset = math.max(0, math.min(maxOffset, math.floor(v + 0.5)))
-                Fill()
-                if bar then bar:SetPos(offset) end
-            end
-            local itemW = menu:GetWidth() - 4 - (maxOffset > 0 and 12 or 0)
-            for i = 1, shown do
-                local it = CreateFrame("Button", nil, menu)
-                it:SetSize(itemW, 18)
-                it:SetPoint("TOPLEFT", 2, -2 - (i - 1) * 18)
-                local hl = it:CreateTexture(nil, "HIGHLIGHT")
-                hl:SetAllPoints()
-                hl:SetColorTexture(1, 1, 1, 0.1)
-                it.sel = it:CreateTexture(nil, "ARTWORK")
-                it.sel:SetAllPoints()
-                it.sel:SetColorTexture(A[1], A[2], A[3], 0.2)
-                it.t = UI.Text(it, "")
-                it.t:SetPoint("LEFT", 4, 0)
-                it.t:SetPoint("RIGHT", -4, 0)
-                it.t:SetWordWrap(false)
-                it:SetScript("OnClick", function(self)
-                    set(self.value)
-                    r.Refresh()
-                    UI.CloseMenu()
-                    Changed()
-                end)
-                items[i] = it
-            end
-            if maxOffset > 0 then
-                bar = UI.ScrollBar(menu, ScrollTo)
-                bar:SetPoint("TOPRIGHT", -3, -3)
-                bar:SetPoint("BOTTOMRIGHT", -3, 3)
-                bar:SetRange(maxOffset, shown / #list)
-                menu:EnableMouseWheel(true)
-                menu:SetScript("OnMouseWheel", function(_, d) ScrollTo(offset - d) end)
-                local cur = get()
-                for k, o in ipairs(list) do
-                    if o[1] == cur then ScrollTo(k - math.ceil(shown / 2)) break end
-                end
-            end
-            Fill()
-            lib.openMenu = menu
+            OpenList(b, Opts(), function(v) return v == get() end, function(v)
+                set(v)
+                r.Refresh()
+                Changed()
+            end)
         end)
         r:SetScript("OnHide", function()
             if lib.openMenu and lib.openMenu.owner == b then UI.CloseMenu() end
@@ -981,7 +1036,15 @@ function lib:New(theme)
     -- Color swatch: color box on the left, label on the right.
     -- getColor() returns a { r, g, b, a } table that the picker edits.
     -- opts.alpha: the picker also edits the opacity
+    -- opts.default = { r, g, b, a } (or a function that returns it): a reset
+    -- icon on the right of the row, shown only while the color differs
+    -- from it; a click copies the default back
     ---------------------------------------------------------------------------
+    local function SameColor(c, d)
+        local function Near(x, y) return math.abs((x or 1) - (y or 1)) < 0.002 end
+        return Near(c.r, d.r) and Near(c.g, d.g) and Near(c.b, d.b) and Near(c.a, d.a)
+    end
+
     local function OpenColorPicker(c, hasAlpha, onChange)
         local prev = { r = c.r, g = c.g, b = c.b, a = c.a }
         local function Apply()
@@ -1028,9 +1091,31 @@ function lib:New(theme)
         s:SetScript("OnLeave", function(self) Hover(self, false) end)
         -- no color (nothing saved yet): the swatch shows empty, the rest of
         -- the window keeps refreshing
+        local function Default()
+            local d = opts.default
+            if type(d) == "function" then d = d() end
+            return d
+        end
+        if opts.default then
+            r.label:SetPoint("RIGHT", -22, 0)
+            r.label:SetWordWrap(false)
+            r.reset = UI.IconButton(r, "reset", 16, function()
+                local c, d = getColor(), Default()
+                if not (c and d) then return end
+                c.r, c.g, c.b, c.a = d.r, d.g, d.b, d.a
+                r.Refresh()
+                if onChange then onChange() end
+                Changed()
+            end, { tip = UI.strings.reset })
+            r.reset:SetPoint("RIGHT")
+        end
         r.Refresh = function()
             local c = getColor()
             if c then s:SetBackdropColor(c.r, c.g, c.b, 1) else s:SetBackdropColor(0, 0, 0, 0) end
+            if r.reset then
+                local d = Default()
+                r.reset:SetShown(c ~= nil and d ~= nil and not SameColor(c, d))
+            end
         end
         s:SetScript("OnClick", function()
             local c = getColor()
@@ -2494,6 +2579,7 @@ function lib:New(theme)
         search = "Search...",
         accept = "Accept",
         cancel = "Cancel",
+        reset = "Reset to default",
     }
 
     return UI
