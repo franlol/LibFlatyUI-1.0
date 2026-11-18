@@ -344,42 +344,64 @@ function lib:New(theme)
 
     -- Turns a button into a two-step one: the first click asks to confirm,
     -- the second one (within 3 seconds) runs the action
-    function UI.Confirm(b, armedText)
-        local action = b:GetScript("OnClick")
-        local saved, r, g, bl
-        local token = 0
+    -- The one two-step click of the lib (every "confirm" uses it): the
+    -- first click arms the button (show(true)), a second one within
+    -- CONFIRM_TIME runs action. A double click does not count. It disarms
+    -- by itself after CONFIRM_TIME and when the button hides. Only show()
+    -- differs between controls: where "Click again to confirm" appears.
+    -- b.armed is true while armed; b.Disarm() cancels.
+    local CONFIRM_TIME, DOUBLE_CLICK = 3, 0.4
+    local function TwoStep(b, action, show)
+        local armedAt, token = 0, 0
         local function Disarm()
             if not b.armed then return end
             b.armed = nil
-            b.text:SetText(saved)
-            b.text:SetTextColor(r, g, bl)
+            show(false)
         end
         b:SetScript("OnClick", function(self, ...)
-            if self.armed then
-                Disarm()
-                if action then action(self, ...) end
+            if not self.armed then
+                self.armed, armedAt = true, GetTime()
+                show(true)
+                token = token + 1
+                local mine = token
+                C_Timer.After(CONFIRM_TIME, function() if token == mine then Disarm() end end)
                 return
             end
-            saved = self.text:GetText()
-            r, g, bl = self.text:GetTextColor()
-            self.armed = true
-            self.text:SetText(armedText or UI.strings.confirm)
-            self.text:SetTextColor(1, 0.8, 0.3)
-            token = token + 1
-            local mine = token
-            C_Timer.After(3, function() if token == mine then Disarm() end end)
+            if GetTime() - armedAt < DOUBLE_CLICK then return end
+            Disarm()
+            if action then action(self, ...) end
         end)
         b:HookScript("OnHide", Disarm)
+        b.Disarm = Disarm
+    end
+
+    -- Text button: while armed its text reads "Click again to confirm"
+    -- (or armedText). Buttons take it as a parameter: confirm = true.
+    function UI.Confirm(b, armedText)
+        local saved, r, g, bl
+        TwoStep(b, b:GetScript("OnClick"), function(on)
+            if on then
+                saved = b.text:GetText()
+                r, g, bl = b.text:GetTextColor()
+                b.text:SetText(armedText or UI.strings.confirm)
+                b.text:SetTextColor(1, 0.8, 0.3)
+            else
+                b.text:SetText(saved)
+                b.text:SetTextColor(r, g, bl)
+            end
+        end)
         return b
     end
 
-    -- Row of buttons sharing the width. list = { { text, onClick, style, tip }, ... }
+    -- Row of buttons sharing the width. list = { { text, onClick, style, tip,
+    -- confirm = true }, ... }; confirm: asks first (or confirm = "armed text")
     function UI.Buttons(parent, list, opts)
         local r = Row(parent, 20, opts)
         r.buttons = {}
         for i, def in ipairs(list) do
             local b = UI.Button(r, def[1], 80, 20, def[2], def[3])
             if def[4] then UI.Tip(b, def[1], def[4]) end
+            if def.confirm then UI.Confirm(b, type(def.confirm) == "string" and def.confirm or nil) end
             r.buttons[i] = b
         end
         r.OnWidth = function(w)
@@ -403,6 +425,8 @@ function lib:New(theme)
     --   opts.style  "danger": glyph in the danger color
     --   opts.isOn() -> true: lit with the accent, like a selected option
     --                  (a toggle: lock, eye...); refreshed with the others
+    --   opts.confirm = true  asks first: red border and "Click again to
+    --                  confirm" in a tooltip until the second click
     ---------------------------------------------------------------------------
     local GLYPH_COLOR = { 0.8, 0.8, 0.84 }
 
@@ -450,6 +474,25 @@ function lib:New(theme)
                 end
             end
             Register(b)
+        end
+        if opts.confirm then
+            -- no room for text: the border turns red and a tooltip asks
+            TwoStep(b, onClick, function(on)
+                if on then
+                    b.borderColor = { T.danger[1], T.danger[2], T.danger[3], 1 }
+                    b:SetBackdropBorderColor(unpack(b.borderColor))
+                    if b.glyph then b.glyph:SetColor(unpack(T.danger, 1, 3)) end
+                    GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(UI.strings.confirm, T.danger[1], T.danger[2], T.danger[3])
+                    GameTooltip:Show()
+                else
+                    b.borderColor = T.border
+                    b:SetBackdropBorderColor(unpack(T.border))
+                    if b.glyph then b.glyph:SetColor(unpack(base, 1, 3)) end
+                    if GameTooltip:GetOwner() == b then GameTooltip:Hide() end
+                    if b.Refresh then b.Refresh() end
+                end
+            end)
         end
         return b
     end
@@ -1078,51 +1121,32 @@ function lib:New(theme)
             if type(d) == "function" then d = d() end
             return d
         end
-        -- Reset asks first, like the x of a list: the first click shows
-        -- "Click again to confirm" in place of the label, the second (within
-        -- 3 s) resets. A double click does not count.
-        local armed, armedAt, token = false, 0, 0
-        local function Disarm()
-            if not armed then return end
-            armed = false
-            r.msg:Hide()
-            r.label:Show()
-            r.reset.borderColor = T.border
-            r.reset:SetBackdropBorderColor(unpack(T.border))
-        end
+        -- Reset asks first (the shared two-step click); while armed,
+        -- "Click again to confirm" shows in place of the label
         if opts.default then
-            r.reset = UI.Button(r, UI.strings.reset, 40, 16, function(self)
-                if not armed then
-                    armed, armedAt = true, GetTime()
-                    r.msg:SetText(UI.strings.confirm)
-                    r.msg:Show()
-                    r.label:Hide()
-                    self.borderColor = { T.danger[1], T.danger[2], T.danger[3], 1 }
-                    self:SetBackdropBorderColor(unpack(self.borderColor))
-                    token = token + 1
-                    local mine = token
-                    C_Timer.After(3, function() if token == mine then Disarm() end end)
-                    return
-                end
-                if GetTime() - armedAt < 0.4 then return end
-                Disarm()
+            r.reset = UI.Button(r, UI.strings.reset, 40, 16, nil, "danger")
+            r.reset:SetWidth(math.max(40, math.ceil(r.reset.text:GetStringWidth()) + 14))
+            r.reset:SetPoint("RIGHT")
+            r.label:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
+            r.label:SetWordWrap(false)
+            r.msg = UI.Text(r, UI.strings.confirm, T.labelFont, T.danger)
+            r.msg:SetPoint("LEFT", s, "RIGHT", 6, 0)
+            r.msg:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
+            r.msg:SetWordWrap(false)
+            r.msg:Hide()
+            TwoStep(r.reset, function()
                 local c, d = getColor(), Default()
                 if not (c and d) then return end
                 c.r, c.g, c.b, c.a = d.r, d.g, d.b, d.a
                 r.Refresh()
                 if onChange then onChange() end
                 Changed()
-            end, "danger")
-            r.reset:SetWidth(math.max(40, math.ceil(r.reset.text:GetStringWidth()) + 14))
-            r.reset:SetPoint("RIGHT")
-            r.label:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
-            r.label:SetWordWrap(false)
-            r.msg = UI.Text(r, "", T.labelFont, T.danger)
-            r.msg:SetPoint("LEFT", s, "RIGHT", 6, 0)
-            r.msg:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
-            r.msg:SetWordWrap(false)
-            r.msg:Hide()
-            r:HookScript("OnHide", Disarm)
+            end, function(on)
+                r.msg:SetShown(on)
+                r.label:SetShown(not on)
+                r.reset.borderColor = on and { T.danger[1], T.danger[2], T.danger[3], 1 } or T.border
+                r.reset:SetBackdropBorderColor(unpack(r.reset.borderColor))
+            end)
         end
         r.Refresh = function()
             local c = getColor()
@@ -1130,7 +1154,7 @@ function lib:New(theme)
             if r.reset then
                 local d = Default()
                 local differs = c ~= nil and d ~= nil and not SameColor(c, d)
-                if not differs then Disarm() end
+                if not differs then r.reset.Disarm() end
                 r.reset:SetShown(differs)
             end
         end
@@ -1511,7 +1535,9 @@ function lib:New(theme)
             if not busy then slider:SetScript("OnUpdate", nil) end
         end
 
-        -- remove: the row waiting for the second click
+        -- remove: the row waiting for the second click. Same rules as the
+        -- shared two-step click (TwoStep), but the armed state belongs to the
+        -- item, not to a button: rows are reused while the list scrolls.
         local armed, armToken, armedAt = nil, 0, 0
         r:HookScript("OnHide", function() armed = nil end)
 
@@ -1634,12 +1660,12 @@ function lib:New(theme)
                     local l = self:GetParent()
                     if not l.item then return end
                     -- a double click is not a confirmation
-                    if armed == l.item and GetTime() - armedAt < 0.4 then return end
+                    if armed == l.item and GetTime() - armedAt < DOUBLE_CLICK then return end
                     if opts.confirmRemove ~= false and armed ~= l.item then
                         armed, armedAt = l.item, GetTime()
                         armToken = armToken + 1
                         local mine = armToken
-                        C_Timer.After(3, function()
+                        C_Timer.After(CONFIRM_TIME, function()
                             if armToken == mine and armed then
                                 armed = nil
                                 r.Refresh()

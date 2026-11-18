@@ -59,7 +59,7 @@ win:Select("general")
 | Long or multi-line text (code, import string) | `CodeBox` | `Input` |
 | Filtering a list | `SearchBox` | `Input` |
 | An action (reset, copy, test) | `Buttons` | a dropdown plus an Apply button |
-| A destructive action | `Buttons` with `"danger"` + `Confirm` (or `Dialog` for big ones) | a plain button |
+| A destructive action | `Buttons` with `"danger"` and `confirm = true` (or `Dialog` for big ones) | a plain button, or your own confirm |
 | A small action next to a title or in a toolbar (add, remove, more) | `IconButton` / `card:AddHeaderButton` | a text button |
 | An action with a few variants (add from a template) | a button that opens `Menu` | a `Dropdown` plus an Add button |
 | Undoing one value back to its default | `default` on the control (`Swatch`) | a Reset button per card |
@@ -73,7 +73,7 @@ win:Select("general")
 | A rarely used card that should not take room | `Card` with `fold = true` | hiding it |
 | One item picked from a list, with its settings beside it | `Split` | two cards side by side |
 | A few views inside one card or page | `Tabs` | separate nav pages for tiny views |
-| A question before something irreversible | `Dialog` | `Confirm` alone, when the loss is big |
+| A question before something irreversible | `Dialog` | `confirm = true` alone, when the loss is big |
 | Top-level areas of the settings | `win:AddNav` (+ `win:AddSection` for groups) | `Tabs` |
 
 ## Design rules
@@ -92,9 +92,10 @@ user asks otherwise.
 - **Up to 3 choices: `Segmented`. More, or a list that changes: `Dropdown`.**
 - **Actions are buttons.** No "pick something, then press Apply". An action
   with variants opens a `Menu`.
-- **Reset and destructive actions:** `"danger"` style and `UI.Confirm` (two
-  clicks), or `UI.Dialog` when a lot is lost. Even a single value (the Reset
-  of a `Swatch` with `default`) asks first.
+- **Reset and destructive actions:** `"danger"` style and `confirm = true`
+  (two clicks), or `UI.Dialog` when a lot is lost. Even a single value (the
+  Reset of a `Swatch` with `default`) asks first. Never write your own
+  confirm: use the parameter.
 - **No filler text.** No notes or tooltips that repeat the label. A subtitle or
   note must say something the controls don't.
 - **Same thing, same control.** If an option exists for several kinds of
@@ -129,19 +130,27 @@ To build your own row: `UI.Row(parent, height, opts)`, then set
 ### Buttons
 
 **`UI.Buttons(parent, list, opts)`** (row): buttons sharing the row width.
-`list = { { text, onClick, style, tip }, ... }`. Style: `nil`, `"accent"` (the
-main action) or `"danger"`. The buttons are `row.buttons[i]`.
+`list = { { text, onClick, style, tip, confirm = true }, ... }`. Style: `nil`,
+`"accent"` (the main action) or `"danger"`. `confirm = true` makes it ask
+first (or `confirm = "armed text"`). The buttons are `row.buttons[i]`.
 
 ```lua
-local r = card:Add(UI.Buttons(card, {
+card:Add(UI.Buttons(card, {
     { "Test", Test },
-    { "Reset", Reset, "danger" },
+    { "Reset", Reset, "danger", confirm = true },
 }))
-UI.Confirm(r.buttons[2])
 ```
 
-**`UI.Confirm(button, armedText)`**: the first click arms the button (text
-turns to "Click again to confirm"), a second click within 3 s runs it.
+**Confirm (two clicks)**: one behavior everywhere, turned on with
+`confirm = true` on `Buttons`, `IconButton` and `card:AddHeaderButton`, and
+built into `Swatch` reset and the `List` remove x. The first click arms it and
+shows "Click again to confirm"; a second click within 3 s runs it. A double
+click does not count; it goes back after 3 s or when hidden. Where the message
+shows: the button text (text buttons), a tooltip and a red border (icon
+buttons), or the row (swatch, list).
+
+**`UI.Confirm(button, armedText)`**: the same, for a single `UI.Button` you
+placed yourself.
 
 **`UI.Button(parent, text, w, h, onClick, style)`**: a single button that you
 place yourself (not a row). For card rows, use `Buttons`.
@@ -150,8 +159,8 @@ place yourself (not a row). For card rows, use `Buttons`.
 `icon` is a drawn glyph (`"plus"`, `"minus"`, `"close"`, `"more"`, `"up"`,
 `"down"`, `"left"`, `"right"`) or any texture path or atlas. Size 16 (default)
 or 20. `opts.tip`, `opts.style = "danger"`, `opts.isOn()` lights it with the
-accent (a toggle such as lock or pin). Not a row; inside a card use
-`card:AddHeaderButton` or place it in a `UI.Row`.
+accent (a toggle such as lock or pin), `opts.confirm = true` asks first. Not
+a row; inside a card use `card:AddHeaderButton` or place it in a `UI.Row`.
 
 **`UI.Menu(owner, items, onPick)`**: a list of actions that drops under any
 button. `items = { { value, label }, ... }` or a function that returns it;
