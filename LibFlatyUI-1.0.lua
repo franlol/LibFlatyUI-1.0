@@ -1203,18 +1203,21 @@ function lib:New(theme)
     -- space above. A card hides a divider that would sit alone: a heading
     -- with no visible row under it (before the next divider), a separator
     -- also with none above it.
+    -- opts.accent = true: the line takes the brand color (as faint as the
+    -- line under a card title)
     ---------------------------------------------------------------------------
-    local function DividerLine(r)
+    local function DividerLine(r, accent)
         local line = r:CreateTexture(nil, "ARTWORK")
         line:SetHeight(1)
-        line:SetColorTexture(unpack(T.cardBorder))
+        if accent then line:SetColorTexture(A[1], A[2], A[3], 0.3)
+        else line:SetColorTexture(unpack(T.cardBorder)) end
         return line
     end
 
     function UI.Separator(parent, opts)
         local r = Row(parent, 9, opts)
         r.divider = "line"
-        r.line = DividerLine(r)
+        r.line = DividerLine(r, opts and opts.accent)
         r.line:SetPoint("LEFT", 0, 0)
         r.line:SetPoint("RIGHT", 0, 0)
         return r
@@ -1227,7 +1230,7 @@ function lib:New(theme)
         r.text = UI.Text(r, text, T.labelFont, T.muted)
         r.text:SetPoint("LEFT")
         r.text:SetWordWrap(false)
-        r.line = DividerLine(r)
+        r.line = DividerLine(r, opts and opts.accent)
         r.line:SetPoint("LEFT", r.text, "RIGHT", 8, 0)
         r.line:SetPoint("RIGHT")
         return r
@@ -2036,7 +2039,8 @@ function lib:New(theme)
     -- page:AddSection(label) starts a section: a title (or, with no label,
     -- just a line) across every column; the cards added after it go below,
     -- the columns starting level again. A section with no visible card
-    -- hides its title.
+    -- hides its title. page:AddSection(label, { accent = true }): the line
+    -- takes the brand color.
     ---------------------------------------------------------------------------
     local function BarRoom() return 1 + 8 + T.pad end   -- edge, scroll bar, space to the cards
     local SECTION_SPACE = 8   -- extra space above a section title (not at the top)
@@ -2084,12 +2088,13 @@ function lib:New(theme)
             return card
         end
 
-        function page:AddSection(label)
+        function page:AddSection(label, sopts)
             local head = CreateFrame("Frame", nil, content)
             head:SetHeight(label and 16 or 1)
             head.line = head:CreateTexture(nil, "ARTWORK")
             head.line:SetHeight(1)
-            head.line:SetColorTexture(1, 1, 1, 0.12)
+            if sopts and sopts.accent then head.line:SetColorTexture(A[1], A[2], A[3], 0.3)
+            else head.line:SetColorTexture(1, 1, 1, 0.12) end
             head.line:SetPoint("RIGHT")
             if label then
                 head.text = UI.Text(head, label, T.titleFont, { 0.85, 0.85, 0.88 })
