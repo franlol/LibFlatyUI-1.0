@@ -93,9 +93,8 @@ user asks otherwise.
 - **Actions are buttons.** No "pick something, then press Apply". An action
   with variants opens a `Menu`.
 - **Reset and destructive actions:** `"danger"` style and `UI.Confirm` (two
-  clicks), or `UI.Dialog` when a lot is lost. Resetting a single value (the
-  reset icon of a `Swatch` with `default`) needs no confirm: it only shows
-  when the value changed, and the value can be set again.
+  clicks), or `UI.Dialog` when a lot is lost. Even a single value (the Reset
+  of a `Swatch` with `default`) asks first.
 - **No filler text.** No notes or tooltips that repeat the label. A subtitle or
   note must say something the controls don't.
 - **Same thing, same control.** If an option exists for several kinds of
@@ -148,8 +147,8 @@ turns to "Click again to confirm"), a second click within 3 s runs it.
 place yourself (not a row). For card rows, use `Buttons`.
 
 **`UI.IconButton(parent, icon, size, onClick, opts)`**: small square button.
-`icon` is a drawn glyph (`"plus"`, `"minus"`, `"close"`, `"more"`, `"reset"`,
-`"up"`, `"down"`, `"left"`, `"right"`) or any texture path or atlas. Size 16 (default)
+`icon` is a drawn glyph (`"plus"`, `"minus"`, `"close"`, `"more"`, `"up"`,
+`"down"`, `"left"`, `"right"`) or any texture path or atlas. Size 16 (default)
 or 20. `opts.tip`, `opts.style = "danger"`, `opts.isOn()` lights it with the
 accent (a toggle such as lock or pin). Not a row; inside a card use
 `card:AddHeaderButton` or place it in a `UI.Row`.
@@ -198,8 +197,9 @@ list shows its file name.
 the color picker. `getColor()` returns a `{ r, g, b, a }` table that the picker
 edits in place; `nil` shows an empty swatch that does not open.
 `opts.alpha = true` edits opacity too. `opts.default = { r, g, b, a }` (or a
-function that returns it) adds a reset icon on the right of the row, shown
-only while the color differs from the default.
+function that returns it) adds a red Reset button on the right, shown only
+while the color differs from the default. It asks first: "Click again to
+confirm" shows in place of the label.
 
 ### Text
 

@@ -171,9 +171,9 @@ local function NewChevron(parent, color)
 end
 
 -- Small flat glyph for icon buttons, drawn from bars like the tick:
--- "plus", "minus", "close", "more", "reset", "up", "down", "left", "right".
+-- "plus", "minus", "close", "more", "up", "down", "left", "right".
 -- g = size of the glyph box. f:SetColor(r, g, b)
-local GLYPHS = { plus = true, minus = true, close = true, more = true, reset = true,
+local GLYPHS = { plus = true, minus = true, close = true, more = true,
     up = true, down = true, left = true, right = true }
 local function NewGlyph(parent, kind, g)
     local f = CreateFrame("Frame", nil, parent)
@@ -199,24 +199,6 @@ local function NewGlyph(parent, kind, g)
     elseif kind == "more" then
         local s = math.max(3, math.floor(g / 3 + 0.5))
         for _, x in ipairs({ -s, 0, s }) do Bar(2, 2, x, 0) end
-    elseif kind == "reset" then
-        -- circular arrow: an arc of short bars from the lower right, over the
-        -- top, to the lower left; the head at the lower right end
-        local rr, a0, a1, n = g * 0.42, -60, 210, 7
-        local step = (a1 - a0) / n
-        local chord = 2 * rr * math.sin(math.rad(step) / 2) + 1
-        for i = 0, n - 1 do
-            local m = math.rad(a0 + step * (i + 0.5))
-            Bar(chord, 2, rr * math.cos(m), rr * math.sin(m), math.deg(m) + 90)
-        end
-        local t = math.rad(a0)
-        local tx, ty = rr * math.cos(t), rr * math.sin(t)
-        local back = math.deg(t) + 90   -- from the tip back along the arc
-        local len = g * 0.45
-        for _, d in ipairs({ 45, -45 }) do
-            local w = math.rad(back + d)
-            Bar(len, 2, tx + math.cos(w) * len / 2, ty + math.sin(w) * len / 2, back + d)
-        end
     else
         -- chevron pointing right, turned to its direction (same shape as
         -- the fold chevron, scaled to the box)
@@ -1036,9 +1018,9 @@ function lib:New(theme)
     -- Color swatch: color box on the left, label on the right.
     -- getColor() returns a { r, g, b, a } table that the picker edits.
     -- opts.alpha: the picker also edits the opacity
-    -- opts.default = { r, g, b, a } (or a function that returns it): a reset
-    -- icon on the right of the row, shown only while the color differs
-    -- from it; a click copies the default back
+    -- opts.default = { r, g, b, a } (or a function that returns it): a red
+    -- Reset button on the right, shown only while the color differs from
+    -- it. It asks first ("Click again to confirm" in place of the label).
     ---------------------------------------------------------------------------
     local function SameColor(c, d)
         local function Near(x, y) return math.abs((x or 1) - (y or 1)) < 0.002 end
@@ -1096,25 +1078,60 @@ function lib:New(theme)
             if type(d) == "function" then d = d() end
             return d
         end
+        -- Reset asks first, like the x of a list: the first click shows
+        -- "Click again to confirm" in place of the label, the second (within
+        -- 3 s) resets. A double click does not count.
+        local armed, armedAt, token = false, 0, 0
+        local function Disarm()
+            if not armed then return end
+            armed = false
+            r.msg:Hide()
+            r.label:Show()
+            r.reset.borderColor = T.border
+            r.reset:SetBackdropBorderColor(unpack(T.border))
+        end
         if opts.default then
-            r.label:SetPoint("RIGHT", -22, 0)
-            r.label:SetWordWrap(false)
-            r.reset = UI.IconButton(r, "reset", 16, function()
+            r.reset = UI.Button(r, UI.strings.reset, 40, 16, function(self)
+                if not armed then
+                    armed, armedAt = true, GetTime()
+                    r.msg:SetText(UI.strings.confirm)
+                    r.msg:Show()
+                    r.label:Hide()
+                    self.borderColor = { T.danger[1], T.danger[2], T.danger[3], 1 }
+                    self:SetBackdropBorderColor(unpack(self.borderColor))
+                    token = token + 1
+                    local mine = token
+                    C_Timer.After(3, function() if token == mine then Disarm() end end)
+                    return
+                end
+                if GetTime() - armedAt < 0.4 then return end
+                Disarm()
                 local c, d = getColor(), Default()
                 if not (c and d) then return end
                 c.r, c.g, c.b, c.a = d.r, d.g, d.b, d.a
                 r.Refresh()
                 if onChange then onChange() end
                 Changed()
-            end, { tip = UI.strings.reset })
+            end, "danger")
+            r.reset:SetWidth(math.max(40, math.ceil(r.reset.text:GetStringWidth()) + 14))
             r.reset:SetPoint("RIGHT")
+            r.label:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
+            r.label:SetWordWrap(false)
+            r.msg = UI.Text(r, "", T.labelFont, T.danger)
+            r.msg:SetPoint("LEFT", s, "RIGHT", 6, 0)
+            r.msg:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
+            r.msg:SetWordWrap(false)
+            r.msg:Hide()
+            r:HookScript("OnHide", Disarm)
         end
         r.Refresh = function()
             local c = getColor()
             if c then s:SetBackdropColor(c.r, c.g, c.b, 1) else s:SetBackdropColor(0, 0, 0, 0) end
             if r.reset then
                 local d = Default()
-                r.reset:SetShown(c ~= nil and d ~= nil and not SameColor(c, d))
+                local differs = c ~= nil and d ~= nil and not SameColor(c, d)
+                if not differs then Disarm() end
+                r.reset:SetShown(differs)
             end
         end
         s:SetScript("OnClick", function()
@@ -2579,7 +2596,7 @@ function lib:New(theme)
         search = "Search...",
         accept = "Accept",
         cancel = "Cancel",
-        reset = "Reset to default",
+        reset = "Reset",
     }
 
     return UI
