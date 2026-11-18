@@ -437,8 +437,9 @@ end
 
 for _, s in ipairs({
     { "square", "Square", "Square" },
-    { "round", "Round", "Round" },
+    { "slightly", "Slightly rounded", "SlightlyRounded" },
     { "rounded", "Rounded square", "RoundedSquare" },
+    { "round", "Round", "Round" },
 }) do
     lib.RegisterShape({ key = s[1], name = PREFIX .. s[2],
         mask = MEDIA .. "Masks\\" .. s[3], glow = MEDIA .. "Glows\\" .. s[3] })

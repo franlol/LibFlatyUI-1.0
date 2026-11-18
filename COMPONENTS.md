@@ -338,7 +338,7 @@ is registered in LibSharedMedia-3.0 when an addon loads it.
 | `background` | Gradient up, down, left, right | Solid, Raid frames · background |
 | `border` (backdrop edge files) | Pixel, Glow, Shadow | Tooltip, Dialog |
 | `font` | Inter, Roboto Condensed, Rubik, Oswald, Manrope, Nunito | Friz Quadrata, Arial Narrow, Skurri, Morpheus |
-| shapes | Square, Round, Rounded square | |
+| shapes | Square, Slightly rounded, Rounded square, Round | |
 
 All textures are white, so a color tints them (use black for a shadow). Fonts are
 under the SIL Open Font License (`Media/Fonts/LICENSES`).

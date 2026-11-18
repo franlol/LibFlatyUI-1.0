@@ -41,7 +41,7 @@ groups that open and close. Long texts are cut and shown whole on hover.
 
 A basic set that every addon gets, without SharedMedia: bar textures,
 backgrounds, border edges, six fonts (Inter, Roboto Condensed, Rubik, Oswald,
-Manrope, Nunito) and shapes (square, round, rounded square) with masks and
+Manrope, Nunito) and shapes (square, slightly rounded, rounded square, round) with masks and
 glows. Each one is named `Flaty: <name>` and registered in LibSharedMedia-3.0.
 See the Media section of [COMPONENTS.md](COMPONENTS.md#media).
 
