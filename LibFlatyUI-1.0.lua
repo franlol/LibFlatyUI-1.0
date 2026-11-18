@@ -1121,7 +1121,7 @@ function lib:New(theme)
             local n = #List()
             local cell = width / math.max(n, 1)
             for i = 1, n do
-                local t = r.tiles[i]
+                local t = Tile(i)   -- the card can lay out before the first refresh
                 t:ClearAllPoints()
                 t:SetPoint("TOP", r, "TOPLEFT", cell * (i - 0.5), top)
                 t.name:SetWidth(cell - 4)
