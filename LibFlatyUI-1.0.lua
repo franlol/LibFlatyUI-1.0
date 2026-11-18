@@ -33,7 +33,7 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 12
+local MAJOR, MINOR = "LibFlatyUI-1.0", 13
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -527,7 +527,8 @@ function lib:New(theme)
 
         local function Round(v)
             v = math.floor(v / step + 0.5) * step
-            if step < 1 then v = tonumber(("%.2f"):format(v)) end
+            -- 4 decimals: drops float noise, keeps steps like 0.005
+            if step < 1 then v = tonumber(("%.4f"):format(v)) end
             return math.min(maxV, math.max(minV, v))
         end
         local function Show(v) value:SetText(fmt and fmt(v) or tostring(v)) end
