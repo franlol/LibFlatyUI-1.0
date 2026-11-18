@@ -344,7 +344,7 @@ is registered in LibSharedMedia-3.0 when an addon loads it.
 | `background` | Gradient up, down, left, right | Solid, Raid frames · background |
 | `border` (backdrop edge files) | Pixel, Glow, Shadow | Tooltip, Dialog |
 | `font` | Inter, Roboto Condensed, Rubik, Oswald, Manrope, Nunito | Friz Quadrata, Arial Narrow, Skurri, Morpheus |
-| shapes | Square, Slightly rounded, Rounded square, Round | |
+| shapes | Square, Slightly rounded, Rounded square, Round, and a rounded square for every percent from 0 (square) to 100 (round) | |
 
 All textures are white, so a color tints them (use black for a shadow). Fonts are
 under the SIL Open Font License (`Media/Fonts/LICENSES`).
@@ -361,6 +361,7 @@ addon that loads it. Embed the lib at `Libs\LibFlatyUI-1.0` in your addon.
 | `UI.SetBgTexture(tex, path)` | texture or atlas; `"none"` hides it |
 | `UI.SetFontFile(fs, path, size, flags)` | font with the game's font as fallback |
 | `UI.ShapeList()`, `UI.GetShape(key)` | shapes: `{ key, name, mask, glow }` |
+| `UI.Rounded(pct)` | key of the rounded square with `pct`% round corners (`"r0"`-`"r100"`), for a Corners slider |
 | `UI.SetShapeMask(texture, key)` | cut a texture to a shape |
 | `UI.ShapeBorder(frame)` | border and glow of a shape behind a frame: `:SetShape(key)`, `:SetBorder(size, color)`, `:SetGlow(color)` |
 | `LibStub("LibFlatyUI-1.0").RegisterShape(def)` | add a shape: `{ key, name, mask, glow }` |

@@ -37,7 +37,7 @@
 -------------------------------------------------------------------------------
 
 local LOADER = ...   -- the addon whose TOC loads this file (for the media path)
-local MAJOR, MINOR = "LibFlatyUI-1.0", 17
+local MAJOR, MINOR = "LibFlatyUI-1.0", 18
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -421,8 +421,12 @@ lib.mediaEvents:SetScript("OnEvent", RegisterLSM)
 -------------------------------------------------------------------------------
 -- Shapes: a mask (white shape that fills its file) and a glow (the same
 -- shape filling the middle 3/4 of its file, fading out to the edges).
--- Masks work with Minimap:SetMaskTexture and with mask textures. Addons can
--- add more: lib.RegisterShape({ key, name, mask, glow }).
+-- Masks work with Minimap:SetMaskTexture and with mask textures.
+--
+-- Rounded squares come in every percent of roundness, from 0 (square) to
+-- 100 (circle): key "r0" ... "r100", or lib.Rounded(pct) for the key. The
+-- named shapes are some of them. Addons can add more:
+-- lib.RegisterShape({ key, name, mask, glow }).
 -------------------------------------------------------------------------------
 lib.shapes = lib.shapes or {}
 
@@ -436,18 +440,36 @@ function lib.RegisterShape(def)
     lib.shapes[#lib.shapes + 1] = def
 end
 
-for _, s in ipairs({
-    { "square", "Square", "Square" },
-    { "slightly", "Slightly rounded", "SlightlyRounded" },
-    { "rounded", "Rounded square", "RoundedSquare" },
-    { "round", "Round", "Round" },
-}) do
-    lib.RegisterShape({ key = s[1], name = PREFIX .. s[2],
-        mask = MEDIA .. "Masks\\" .. s[3], glow = MEDIA .. "Glows\\" .. s[3] })
+-- Key of the rounded square with pct% round corners (0-100)
+function lib.Rounded(pct)
+    pct = math.max(0, math.min(100, math.floor((tonumber(pct) or 0) + 0.5)))
+    return "r" .. pct
 end
 
--- A shape by key; the square for an unknown key
+local rounded = {}
+local function RoundedShape(pct, name)
+    if not rounded[pct] then
+        local file = ("Rounded\\R%03d"):format(pct)
+        rounded[pct] = { key = "r" .. pct, name = name or (PREFIX .. pct .. "%"), corners = pct,
+            mask = MEDIA .. "Masks\\" .. file, glow = MEDIA .. "Glows\\" .. file }
+    end
+    return rounded[pct]
+end
+
+for _, s in ipairs({
+    { "square", "Square", 0 },
+    { "slightly", "Slightly rounded", 8 },
+    { "rounded", "Rounded square", 20 },
+    { "round", "Round", 100 },
+}) do
+    local r = RoundedShape(s[3])
+    lib.RegisterShape({ key = s[1], name = PREFIX .. s[2], corners = s[3], mask = r.mask, glow = r.glow })
+end
+
+-- A shape by key (a named one or "r0"-"r100"); the square for an unknown key
 function lib.GetShape(key)
+    local pct = type(key) == "string" and tonumber(key:match("^r(%d+)$"))
+    if pct and pct <= 100 then return RoundedShape(pct) end
     for _, s in ipairs(lib.shapes) do
         if s.key == key then return s end
     end
@@ -3009,6 +3031,7 @@ function lib:New(theme)
     UI.Media, UI.ResolveMedia = lib.Media, lib.ResolveMedia
     UI.SetBarTexture, UI.SetBgTexture, UI.SetFontFile = lib.SetBarTexture, lib.SetBgTexture, lib.SetFontFile
     UI.GetShape, UI.ShapeList, UI.SetShapeMask, UI.ShapeBorder = lib.GetShape, lib.ShapeList, lib.SetShapeMask, lib.ShapeBorder
+    UI.Rounded = lib.Rounded
     function UI.MediaList(kind, opts)
         opts = opts or {}
         if opts.none and not opts.noneLabel then
