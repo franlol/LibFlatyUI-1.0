@@ -340,7 +340,7 @@ is registered in LibSharedMedia-3.0 when an addon loads it.
 | `font` | Inter, Roboto Condensed, Rubik, Oswald, JetBrains Mono | Friz Quadrata, Arial Narrow, Skurri, Morpheus |
 | shapes | Square, Round, Rounded square | |
 
-All textures are white (Shadow is black), so a color tints them. Fonts are
+All textures are white, so a color tints them (use black for a shadow). Fonts are
 under the SIL Open Font License (`Media/Fonts/LICENSES`).
 
 **Embedding:** the files are read from the copy that runs, found from the
