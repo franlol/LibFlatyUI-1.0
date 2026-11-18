@@ -3,3 +3,5 @@
 *.toc text eol=lf
 *.md text eol=lf
 *.tga binary
+*.ttf binary
+*.txt text eol=lf

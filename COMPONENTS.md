@@ -12,7 +12,8 @@ state, so look there when you're unsure how something looks.
 3. [Design rules](#design-rules)
 4. [Rows: what every control shares](#rows-what-every-control-shares)
 5. [Components](#components)
-6. [Theme](#theme)
+6. [Media](#media)
+7. [Theme](#theme)
 
 ## Setup
 
@@ -40,7 +41,7 @@ win:Select("general")
 - `UI.OnRefresh` (optional) runs at the end of every `RefreshAll`. Use it to
   update texts that are not controls (a card title, a note).
 - `UI.strings` holds the texts the lib shows on its own (`confirm`, `search`,
-  `accept`, `cancel`, `reset`). Replace them to translate, before building
+  `accept`, `cancel`, `reset`, `none`). Replace them to translate, before building
   the window.
 
 ## Picking a component
@@ -53,7 +54,8 @@ win:Select("general")
 | A number in a range | `Slider` | `Input` |
 | One choice of 2 or 3 | `Segmented` | `Dropdown` |
 | One choice of 4 or more, or a list that changes | `Dropdown` | `Segmented` |
-| A font or texture | `Dropdown` with font / texture samples | |
+| A font or texture | `Dropdown` with `UI.MediaList(kind)` | your own list of paths |
+| A shape (minimap, portrait) | `Dropdown` with `UI.ShapeList` | |
 | A color | `Swatch` | |
 | A short text (name, label) | `Input` | `CodeBox` |
 | Long or multi-line text (code, import string) | `CodeBox` | `Input` |
@@ -323,6 +325,52 @@ that darkens the screen. Escape or Cancel closes it.
 | `UI.ScrollBar(parent, onScroll)` | the themed scroll bar (`SetRange`, `SetPos`) |
 | `UI.CloseMenu()` | close the open dropdown list |
 | `UI.pct`, `UI.px` | slider formats |
+
+## Media
+
+The lib ships a basic set of textures, fonts and shapes in `Media/`, so an
+addon never depends on SharedMedia. Every item is named `Flaty: <name>` and
+is registered in LibSharedMedia-3.0 when an addon loads it.
+
+| Type (`kind`) | Flaty items | The game's, also listed |
+|---|---|---|
+| `statusbar` | Smooth, Gradient, Soft, Dark, Striped | Flat, Blizzard, Raid frames, Arena frames, Pet battles, Gloss, Skills |
+| `background` | Gradient up, down, left, right | Solid, Raid frames · background |
+| `border` (backdrop edge files) | Pixel, Glow, Shadow | Tooltip, Dialog |
+| `font` | Inter, Roboto Condensed, Rubik, Oswald, JetBrains Mono | Friz Quadrata, Arial Narrow, Skurri, Morpheus |
+| shapes | Square, Round, Rounded square | |
+
+All textures are white (Shadow is black), so a color tints them. Fonts are
+under the SIL Open Font License (`Media/Fonts/LICENSES`).
+
+**Embedding:** the files are read from the copy that runs, found from the
+addon that loads it. Embed the lib at `Libs\LibFlatyUI-1.0` in your addon.
+
+| Function | Use |
+|---|---|
+| `UI.MediaList(kind, { none = true })` | dropdown options: ours, the game's, then SharedMedia's; fonts drawn in their font, bars and backgrounds with a sample |
+| `UI.Media(kind, name)` | path of an item by its shown name, for defaults: `UI.Media("statusbar", "Flaty: Smooth")` |
+| `UI.ResolveMedia(path)` | a saved path ready to use; nil when its addon is not loaded. Use it in dropdown getters too |
+| `UI.SetBarTexture(bar, path)` | status bar texture; `"none"` hides the fill |
+| `UI.SetBgTexture(tex, path)` | texture or atlas; `"none"` hides it |
+| `UI.SetFontFile(fs, path, size, flags)` | font with the game's font as fallback |
+| `UI.ShapeList()`, `UI.GetShape(key)` | shapes: `{ key, name, mask, glow }` |
+| `UI.SetShapeMask(texture, key)` | cut a texture to a shape |
+| `UI.ShapeBorder(frame)` | border and glow of a shape behind a frame: `:SetShape(key)`, `:SetBorder(size, color)`, `:SetGlow(color)` |
+| `LibStub("LibFlatyUI-1.0").RegisterShape(def)` | add a shape: `{ key, name, mask, glow }` |
+
+Save the path the dropdown gives. A path into another addon's copy of the lib
+still works: `ResolveMedia` finds the file in the copy that runs.
+
+```lua
+card:Add(UI.Dropdown(card, "Texture", function() return UI.MediaList("statusbar") end,
+    function() return UI.ResolveMedia(db.texture) end,
+    function(v) db.texture = v end))
+UI.SetBarTexture(myBar, db.texture)
+```
+
+A shape's mask works with `Minimap:SetMaskTexture(UI.GetShape(key).mask)`.
+Its glow file holds the shape in its middle 3/4; `ShapeBorder` places it.
 
 ## Theme
 

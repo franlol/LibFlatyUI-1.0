@@ -37,6 +37,17 @@ groups that open and close. Long texts are cut and shown whole on hover.
 `card:AddHeaderButton(icon, onClick, opts)` puts icon buttons next to its title.
 `page:AddSection(label)` puts a title across every column of a page, between cards.
 
+## Media
+
+A basic set that every addon gets, without SharedMedia: bar textures,
+backgrounds, border edges, five fonts (Inter, Roboto Condensed, Rubik, Oswald,
+JetBrains Mono) and shapes (square, round, rounded square) with masks and
+glows. Each one is named `Flaty: <name>` and registered in LibSharedMedia-3.0.
+See the Media section of [COMPONENTS.md](COMPONENTS.md#media).
+
+The fonts are under the SIL Open Font License 1.1; their license files are in
+`Media/Fonts/LICENSES`. The textures are made for this lib (MIT).
+
 ## Embedding
 
 In your `.pkgmeta`:
@@ -53,6 +64,8 @@ and in your TOC, after LibStub:
 ```
 Libs\LibFlatyUI-1.0\LibFlatyUI-1.0.lua
 ```
+
+Keep it at `Libs\LibFlatyUI-1.0`: the lib finds its `Media` folder there.
 
 ## License
 

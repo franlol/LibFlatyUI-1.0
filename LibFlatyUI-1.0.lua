@@ -36,7 +36,8 @@
 --   UI.RefreshAll()).
 -------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibFlatyUI-1.0", 14
+local LOADER = ...   -- the addon whose TOC loads this file (for the media path)
+local MAJOR, MINOR = "LibFlatyUI-1.0", 15
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -227,6 +228,289 @@ lib.closer:SetScript("OnEvent", function()
     m:Hide()
     lib.openMenu = nil
 end)
+
+-------------------------------------------------------------------------------
+-- Media: bar textures, backgrounds, borders, fonts and shapes shipped in the
+-- Media folder, so an addon always has a basic set without SharedMedia.
+--
+-- The files are read from the copy that runs: the standalone addon
+-- (AddOns\LibFlatyUI-1.0\Media) or the copy embedded in the addon that
+-- loaded it, which must sit in <Addon>\Libs\LibFlatyUI-1.0.
+--
+-- Every item is named "Flaty: <name>" and registered in LibSharedMedia-3.0
+-- when an addon loads it, so other addons can pick them too.
+-------------------------------------------------------------------------------
+local MEDIA = (LOADER == nil or LOADER == MAJOR)
+    and "Interface\\AddOns\\LibFlatyUI-1.0\\Media\\"
+    or ("Interface\\AddOns\\%s\\Libs\\LibFlatyUI-1.0\\Media\\"):format(LOADER)
+lib.mediaPath = MEDIA
+local PREFIX = "Flaty: "
+
+-- Ours, by LibSharedMedia type: { name, file in the Media folder }
+local OWN = {
+    statusbar = {
+        { "Smooth", "Bars\\Smooth" },
+        { "Gradient", "Bars\\Gradient" },
+        { "Soft", "Bars\\Soft" },
+        { "Dark", "Bars\\Dark" },
+        { "Striped", "Bars\\Striped" },
+    },
+    background = {
+        { "Gradient up", "Backgrounds\\GradientUp" },
+        { "Gradient down", "Backgrounds\\GradientDown" },
+        { "Gradient left", "Backgrounds\\GradientLeft" },
+        { "Gradient right", "Backgrounds\\GradientRight" },
+    },
+    border = {
+        { "Pixel", "Borders\\Pixel" },
+        { "Glow", "Borders\\Glow" },
+        { "Shadow", "Borders\\Shadow" },
+    },
+    font = {
+        { "Inter", "Fonts\\Inter-SemiBold.ttf" },
+        { "Roboto Condensed", "Fonts\\RobotoCondensed-Bold.ttf" },
+        { "Rubik", "Fonts\\Rubik-Medium.ttf" },
+        { "Oswald", "Fonts\\Oswald-Medium.ttf" },
+        { "JetBrains Mono", "Fonts\\JetBrainsMono-Regular.ttf" },
+    },
+}
+
+-- The game's own: always there. A value is a file path or an atlas name.
+local GAME = {
+    statusbar = {
+        { "Flat", FLAT },
+        { "Blizzard", "Interface\\TargetingFrame\\UI-StatusBar" },
+        { "Raid frames", "RaidFrame-Hp-Fill" },
+        { "Raid frames · resource", "_RaidFrame-Resource-Fill" },
+        { "Arena frames", "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
+        { "Pet battles", "Interface\\RaidFrame\\Raid-Bar-Resource-Fill" },
+        { "Gloss", "Interface\\TargetingFrame\\BarFill2" },
+        { "Skills", "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
+    },
+    background = {
+        { "Solid", FLAT },
+        { "Raid frames · background", "raidframe-hp-bg-white" },
+    },
+    border = {
+        { "Tooltip", "Interface\\Tooltips\\UI-Tooltip-Border" },
+        { "Dialog", "Interface\\DialogFrame\\UI-DialogBox-Border" },
+    },
+    font = {
+        { "Friz Quadrata", "Fonts\\FRIZQT__.TTF" },
+        { "Arial Narrow", "Fonts\\ARIALN.TTF" },
+        { "Skurri", "Fonts\\skurri.ttf" },
+        { "Morpheus", "Fonts\\MORPHEUS.ttf" },
+    },
+}
+
+local function LSM()
+    return LibStub("LibSharedMedia-3.0", true)
+end
+
+-- Path of an item by its shown name ("Flaty: Smooth", "Blizzard"), or nil
+function lib.Media(kind, name)
+    for _, e in ipairs(OWN[kind] or {}) do
+        if PREFIX .. e[1] == name then return MEDIA .. e[2] end
+    end
+    for _, e in ipairs(GAME[kind] or {}) do
+        if e[1] == name then return e[2] end
+    end
+    local lsm = LSM()
+    return lsm and lsm:IsValid(kind, name) and lsm:Fetch(kind, name, true) or nil
+end
+
+-- A saved path, ready to use. Our files are found in the running copy even
+-- when the path points to another addon's copy. A file in the folder of an
+-- addon that is not loaded (a SharedMedia texture, in an imported profile)
+-- gives nil: the caller uses its fallback. Atlas names pass through.
+function lib.ResolveMedia(path)
+    if type(path) ~= "string" or path == "" then return nil end
+    local unified = path:gsub("/", "\\")
+    local low = unified:lower()
+    local s, e = low:find("\\libflatyui-1.0\\media\\", 1, true)
+    if s then return MEDIA .. unified:sub(e + 1) end
+    local addon = low:match("^interface\\addons\\([^\\]+)\\")
+    if addon and C_AddOns and C_AddOns.IsAddOnLoaded then
+        local real = unified:match("^[^\\]+\\[^\\]+\\([^\\]+)\\")
+        if not C_AddOns.IsAddOnLoaded(real) then return nil end
+    end
+    return path
+end
+
+-- Dropdown options for a media type: ours, the game's, then the rest of
+-- LibSharedMedia (when an addon loads it), each path once.
+-- kind = "statusbar", "background", "border" or "font"
+-- opts.none = true: "None" first (value "none"); opts.noneLabel names it.
+-- Fonts are drawn in their font; bars and backgrounds show a sample.
+function lib.MediaList(kind, opts)
+    opts = opts or {}
+    local out, seen = {}, {}
+    local sample = kind == "statusbar" or kind == "background"
+    local function Add(value, label)
+        local key = value:lower()
+        if seen[key] then return end
+        seen[key] = true
+        out[#out + 1] = { value, label, kind == "font" and value or nil, sample and value or nil }
+    end
+    for _, e in ipairs(OWN[kind] or {}) do Add(MEDIA .. e[2], PREFIX .. e[1]) end
+    for _, e in ipairs(GAME[kind] or {}) do Add(e[2], e[1]) end
+    local lsm = LSM()
+    if lsm then
+        local extra = {}
+        for name, path in pairs(lsm:HashTable(kind)) do
+            if type(path) == "string" and name:sub(1, #PREFIX) ~= PREFIX then
+                extra[#extra + 1] = { path, name }
+            end
+        end
+        table.sort(extra, function(a, b) return a[2] < b[2] end)
+        for _, e in ipairs(extra) do Add(e[1], e[2]) end
+    end
+    if opts.none then
+        table.insert(out, 1, { "none", opts.noneLabel or "None" })
+    end
+    return out
+end
+
+local function IsNone(path) return path == nil or path == "" or path == "none" end
+
+-- Bar texture from a saved value; "none" keeps the bar but hides the fill
+function lib.SetBarTexture(bar, path)
+    local none = IsNone(path)
+    bar:SetStatusBarTexture(not none and lib.ResolveMedia(path) or FLAT)
+    local t = bar:GetStatusBarTexture()
+    if t then t:SetAlpha(none and 0 or 1) end
+end
+
+-- Plain texture (background) from a saved value: a file or an atlas;
+-- "none" hides it
+function lib.SetBgTexture(tex, path)
+    local none = IsNone(path)
+    local p = not none and lib.ResolveMedia(path) or FLAT
+    if not none and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(p) then
+        tex:SetAtlas(p)
+    else
+        tex:SetTexture(p)
+    end
+    tex:SetShown(not none)
+end
+
+-- Font from a saved value; the game's font when the file can't be used
+function lib.SetFontFile(fs, path, size, flags)
+    local p = lib.ResolveMedia(path) or STANDARD_TEXT_FONT
+    if not fs:SetFont(p, size, flags or "") then
+        fs:SetFont(STANDARD_TEXT_FONT, size, flags or "")
+    end
+end
+
+-- Register ours in LibSharedMedia when an addon brings it
+local function RegisterLSM()
+    local lsm = LSM()
+    if not lsm then return end
+    for kind, list in pairs(OWN) do
+        for _, e in ipairs(list) do lsm:Register(kind, PREFIX .. e[1], MEDIA .. e[2]) end
+    end
+end
+RegisterLSM()
+lib.mediaEvents = lib.mediaEvents or CreateFrame("Frame")
+lib.mediaEvents:RegisterEvent("ADDON_LOADED")
+lib.mediaEvents:RegisterEvent("PLAYER_LOGIN")
+lib.mediaEvents:SetScript("OnEvent", RegisterLSM)
+
+-------------------------------------------------------------------------------
+-- Shapes: a mask (white shape that fills its file) and a glow (the same
+-- shape filling the middle 3/4 of its file, fading out to the edges).
+-- Masks work with Minimap:SetMaskTexture and with mask textures. Addons can
+-- add more: lib.RegisterShape({ key, name, mask, glow }).
+-------------------------------------------------------------------------------
+lib.shapes = lib.shapes or {}
+
+function lib.RegisterShape(def)
+    for i, s in ipairs(lib.shapes) do
+        if s.key == def.key then
+            lib.shapes[i] = def
+            return
+        end
+    end
+    lib.shapes[#lib.shapes + 1] = def
+end
+
+for _, s in ipairs({
+    { "square", "Square", "Square" },
+    { "round", "Round", "Round" },
+    { "rounded", "Rounded square", "RoundedSquare" },
+}) do
+    lib.RegisterShape({ key = s[1], name = PREFIX .. s[2],
+        mask = MEDIA .. "Masks\\" .. s[3], glow = MEDIA .. "Glows\\" .. s[3] })
+end
+
+-- A shape by key; the square for an unknown key
+function lib.GetShape(key)
+    for _, s in ipairs(lib.shapes) do
+        if s.key == key then return s end
+    end
+    return lib.shapes[1]
+end
+
+-- Dropdown options: { key, name }
+function lib.ShapeList()
+    local out = {}
+    for _, s in ipairs(lib.shapes) do out[#out + 1] = { s.key, s.name } end
+    return out
+end
+
+-- Cut a texture to a shape (a mask texture, made once per texture)
+function lib.SetShapeMask(tex, key)
+    if not tex.flatyMask then
+        tex.flatyMask = tex:GetParent():CreateMaskTexture()
+        tex.flatyMask:SetAllPoints(tex)
+        tex:AddMaskTexture(tex.flatyMask)
+    end
+    tex.flatyMask:SetTexture(lib.GetShape(key).mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+end
+
+-- Border and glow of a shape around a frame, drawn behind it. The frame's
+-- content is cut by its owner (Minimap:SetMaskTexture or SetShapeMask).
+--   local sb = lib.ShapeBorder(frame)
+--   sb:SetShape(key)
+--   sb:SetBorder(size, { r, g, b, a })   size 0 or no color: no border
+--   sb:SetGlow({ r, g, b, a })           nil: no glow; it reaches 1/6 of
+--                                        the size past the border
+function lib.ShapeBorder(frame)
+    local holder = CreateFrame("Frame", nil, frame:GetParent() or UIParent)
+    holder:SetFrameStrata(frame:GetFrameStrata())
+    holder:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
+    holder:SetAllPoints(frame)
+    local glow = holder:CreateTexture(nil, "BACKGROUND", nil, 0)
+    local border = holder:CreateTexture(nil, "BACKGROUND", nil, 1)
+    local sb = { frame = holder, key = "square", size = 1 }
+
+    local function Layout()
+        local shape = lib.GetShape(sb.key)
+        local b = (sb.borderColor and sb.size or 0)
+        border:SetTexture(shape.mask)
+        border:ClearAllPoints()
+        border:SetPoint("TOPLEFT", frame, "TOPLEFT", -b, b)
+        border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", b, -b)
+        border:SetShown(b > 0)
+        if sb.borderColor then border:SetVertexColor(unpack(sb.borderColor)) end
+        -- the glow's solid middle (3/4 of its file) covers frame and border
+        local gx = (frame:GetWidth() + 2 * b) / 6
+        local gy = (frame:GetHeight() + 2 * b) / 6
+        glow:SetTexture(shape.glow)
+        glow:ClearAllPoints()
+        glow:SetPoint("TOPLEFT", frame, "TOPLEFT", -b - gx, b + gy)
+        glow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", b + gx, -b - gy)
+        glow:SetShown(sb.glowColor ~= nil)
+        if sb.glowColor then glow:SetVertexColor(unpack(sb.glowColor)) end
+    end
+    frame:HookScript("OnSizeChanged", Layout)
+
+    function sb:SetShape(key) self.key = key Layout() end
+    function sb:SetBorder(size, color) self.size, self.borderColor = size or 0, color Layout() end
+    function sb:SetGlow(color) self.glowColor = color Layout() end
+    Layout()
+    return sb
+end
 
 -------------------------------------------------------------------------------
 -- New instance
@@ -2623,7 +2907,20 @@ function lib:New(theme)
         accept = "Accept",
         cancel = "Cancel",
         reset = "Reset",
+        none = "None",
     }
+
+    -- Media and shapes (see the Media section above lib:New)
+    UI.Media, UI.ResolveMedia = lib.Media, lib.ResolveMedia
+    UI.SetBarTexture, UI.SetBgTexture, UI.SetFontFile = lib.SetBarTexture, lib.SetBgTexture, lib.SetFontFile
+    UI.GetShape, UI.ShapeList, UI.SetShapeMask, UI.ShapeBorder = lib.GetShape, lib.ShapeList, lib.SetShapeMask, lib.ShapeBorder
+    function UI.MediaList(kind, opts)
+        opts = opts or {}
+        if opts.none and not opts.noneLabel then
+            opts = { none = true, noneLabel = UI.strings.none }
+        end
+        return lib.MediaList(kind, opts)
+    end
 
     return UI
 end
