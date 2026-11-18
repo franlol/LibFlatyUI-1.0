@@ -37,7 +37,7 @@
 -------------------------------------------------------------------------------
 
 local LOADER = ...   -- the addon whose TOC loads this file (for the media path)
-local MAJOR, MINOR = "LibFlatyUI-1.0", 15
+local MAJOR, MINOR = "LibFlatyUI-1.0", 16
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -251,6 +251,7 @@ local OWN = {
     statusbar = {
         { "Smooth", "Bars\\Smooth" },
         { "Gradient", "Bars\\Gradient" },
+        { "Gradient reverse", "Bars\\GradientReverse" },
         { "Soft", "Bars\\Soft" },
         { "Dark", "Bars\\Dark" },
         { "Striped", "Bars\\Striped" },
