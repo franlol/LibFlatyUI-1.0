@@ -19,7 +19,7 @@ win:Select("general")
 ```
 
 **[COMPONENTS.md](COMPONENTS.md)** lists every component, when to use each
-one, and the design rules. The Flaty Gallery addon (`/flaty`) shows them all
+one, and the design rules. The [Flaty Gallery](https://github.com/franlol/FlatyGallery) addon (`/flaty`) shows them all
 in every state. Working on the lib: see [AGENTS.md](AGENTS.md).
 
 Controls: `Button`, `Buttons`, `IconButton`, `Confirm`, `Check`, `CheckGroup`, `Switch`,

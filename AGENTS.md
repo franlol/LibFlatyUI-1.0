@@ -19,7 +19,7 @@
   from bars, like the tick and the chevron).
 - **Every new component or state goes in three places:** its comment in the
   code, `COMPONENTS.md` (including the "Picking a component" table when it
-  changes a choice), and the Flaty Gallery addon (`/flaty`).
+  changes a choice), and the [Flaty Gallery](https://github.com/franlol/FlatyGallery) addon (`/flaty`).
 - **Keep old calls working.** New options are optional, and defaults keep the
   current look.
 - **Check before committing:** `luac -p LibFlatyUI-1.0.lua`, and look for

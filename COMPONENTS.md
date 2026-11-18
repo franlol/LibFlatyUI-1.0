@@ -2,7 +2,7 @@
 
 Every component, what it is for, and how to pick one. The comments in
 `LibFlatyUI-1.0.lua` above each constructor list every option; this file is
-the map. The **Flaty Gallery** addon (`/flaty`) shows every component in every
+the map. The [Flaty Gallery](https://github.com/franlol/FlatyGallery) addon (`/flaty`) shows every component in every
 state, so look there when you're unsure how something looks.
 
 ## Contents
