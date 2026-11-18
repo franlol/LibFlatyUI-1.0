@@ -18,8 +18,9 @@ end)
 win:Select("general")
 ```
 
-Controls: `Button`, `Buttons`, `Confirm`, `Check`, `CheckGroup`, `Switch`, `Slider`,
-`Segmented`, `Dropdown`, `Swatch`, `Input`, `SearchBox`, `CodeBox`, `Note`, `List`,
+Controls: `Button`, `Buttons`, `IconButton`, `Confirm`, `Check`, `CheckGroup`, `Switch`,
+`Slider`, `Segmented`, `Dropdown`, `Swatch`, `Input`, `SearchBox`, `CodeBox`, `Note`,
+`Heading`, `Separator`, `List`,
 `Card`, `Page`, `Split`, `Tabs`, `Dialog`, `Window`. The header of `LibFlatyUI-1.0.lua`
 documents the options every control accepts.
 
@@ -28,7 +29,9 @@ optional icon / swatch / dot, secondary text, tag column, column titles, check
 boxes, a remove button that asks for a second click, drag to reorder, and
 groups that open and close. Long texts are cut and shown whole on hover.
 
-`Card(parent, title, subtitle, { fold = true })` folds down to its title bar.
+`Card(parent, title, subtitle, { fold = true })` folds down to its title bar;
+`card:AddHeaderButton(icon, onClick, opts)` puts icon buttons next to its title.
+`page:AddSection(label)` puts a title across every column of a page, between cards.
 
 ## Embedding
 
