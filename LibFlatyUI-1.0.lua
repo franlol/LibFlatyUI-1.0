@@ -66,6 +66,7 @@ lib.defaultTheme = {
     cardGap = 20,          -- space between cards, columns and split panes
     subGap = 2,            -- space above a sub-option (opts.sub) under its row
     pad = 10,              -- inner margin of a card
+    pageMargin = 16,       -- space left and right of the cards (to the navigation and the window edge)
 }
 
 local function Merge(base, over)
@@ -2391,8 +2392,8 @@ function lib:New(theme)
         local navY = -50
         local navs, pages, builders, order = {}, {}, {}, {}
         local area = CreateFrame("Frame", nil, win)
-        area:SetPoint("TOPLEFT", NAV_W + 18, -50)
-        area:SetPoint("BOTTOMRIGHT", -8, opts.status ~= false and 26 or 8)
+        area:SetPoint("TOPLEFT", NAV_W + 10 + T.pageMargin, -50)
+        area:SetPoint("BOTTOMRIGHT", -T.pageMargin, opts.status ~= false and 26 or 8)
 
         function win:AddSection(label)
             local t = UI.Text(win, label, "GameFontDisableSmall")
@@ -2448,7 +2449,7 @@ function lib:New(theme)
         -- status line at the bottom
         if opts.status ~= false then
             local status = UI.Text(win, "", T.labelFont, T.muted)
-            status:SetPoint("BOTTOMLEFT", NAV_W + 18, 9)
+            status:SetPoint("BOTTOMLEFT", NAV_W + 10 + T.pageMargin, 9)
             function win:SetStatus(text) status:SetText(text or "") end
         else
             function win:SetStatus() end
