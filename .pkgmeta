@@ -5,4 +5,5 @@ externals:
 
 ignore:
   - README.md
+  - AGENTS.md
   - LibStub/tests

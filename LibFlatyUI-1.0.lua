@@ -5,6 +5,9 @@
 -- frames, textures and font strings (no Blizzard UI templates other than
 -- BackdropTemplate), so the look does not change between game versions.
 --
+-- COMPONENTS.md (next to this file) lists every component, when to use
+-- each one, and the design rules. Read it before building a window.
+--
 -- Usage
 --   local UI = LibStub("LibFlatyUI-1.0"):New({ accent = { 0.7, 0.55, 1 } })
 --   local win = UI.Window({ name = "MyAddonOptions", title = "MyAddon" })

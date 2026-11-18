@@ -18,6 +18,10 @@ end)
 win:Select("general")
 ```
 
+**[COMPONENTS.md](COMPONENTS.md)** lists every component, when to use each
+one, and the design rules. The Flaty Gallery addon (`/flaty`) shows them all
+in every state. Working on the lib: see [AGENTS.md](AGENTS.md).
+
 Controls: `Button`, `Buttons`, `IconButton`, `Confirm`, `Check`, `CheckGroup`, `Switch`,
 `Slider`, `Segmented`, `Dropdown`, `Swatch`, `Input`, `SearchBox`, `CodeBox`, `Note`,
 `Heading`, `Separator`, `List`,
