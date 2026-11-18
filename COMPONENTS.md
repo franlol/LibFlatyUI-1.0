@@ -361,6 +361,7 @@ addon that loads it. Embed the lib at `Libs\LibFlatyUI-1.0` in your addon.
 | `UI.SetBgTexture(tex, path)` | texture or atlas; `"none"` hides it |
 | `UI.SetFontFile(fs, path, size, flags)` | font with the game's font as fallback |
 | `UI.ShapeList()`, `UI.GetShape(key)` | shapes: `{ key, name, mask, glow }` |
+| `UI.ShapeEdge(key, angle, halfW, halfH, extra)` | x, y of the shape's edge in a direction (degrees, 0 right, 90 up), plus `extra` px past it: icons around a minimap |
 | `UI.Rounded(pct)` | key of the rounded square with `pct`% round corners (`"r0"`-`"r100"`), for a Corners slider |
 | `UI.SetShapeMask(texture, key)` | cut a texture to a shape |
 | `UI.ShapeBorder(frame)` | border and glow of a shape behind a frame: `:SetShape(key)`, `:SetBorder(size, color)`, `:SetGlow(color)` |

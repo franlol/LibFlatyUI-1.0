@@ -37,7 +37,7 @@
 -------------------------------------------------------------------------------
 
 local LOADER = ...   -- the addon whose TOC loads this file (for the media path)
-local MAJOR, MINOR = "LibFlatyUI-1.0", 18
+local MAJOR, MINOR = "LibFlatyUI-1.0", 19
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -464,6 +464,32 @@ for _, s in ipairs({
 }) do
     local r = RoundedShape(s[3])
     lib.RegisterShape({ key = s[1], name = PREFIX .. s[2], corners = s[3], mask = r.mask, glow = r.glow })
+end
+
+-- Where the edge of a shape is, in a direction from its center: x, y
+-- offsets for a frame of half width halfW and half height halfH (the shape
+-- stretches to the frame). angle in degrees: 0 right, 90 up. extra: the
+-- distance past the edge (negative: inside). For icons around a minimap.
+-- Shapes without corners (added by addons) count as squares.
+function lib.ShapeEdge(key, angle, halfW, halfH, extra)
+    local rc = (lib.GetShape(key).corners or 0) / 100
+    local a = math.rad(angle)
+    local c, s = math.cos(a), math.sin(a)
+    -- signed distance to the rounded square of half size 1
+    local function SD(x, y)
+        local qx, qy = math.abs(x) - (1 - rc), math.abs(y) - (1 - rc)
+        local ox, oy = math.max(qx, 0), math.max(qy, 0)
+        return math.sqrt(ox * ox + oy * oy) + math.min(math.max(qx, qy), 0) - rc
+    end
+    -- the edge along the ray (between 1 for a circle and 1.42 for a corner)
+    local lo, hi = 0, 1.5
+    for _ = 1, 24 do
+        local m = (lo + hi) / 2
+        if SD(c * m, s * m) > 0 then hi = m else lo = m end
+    end
+    local t = (lo + hi) / 2
+    extra = extra or 0
+    return c * (t * halfW + extra), s * (t * halfH + extra)
 end
 
 -- A shape by key (a named one or "r0"-"r100"); the square for an unknown key
@@ -3031,7 +3057,7 @@ function lib:New(theme)
     UI.Media, UI.ResolveMedia = lib.Media, lib.ResolveMedia
     UI.SetBarTexture, UI.SetBgTexture, UI.SetFontFile = lib.SetBarTexture, lib.SetBgTexture, lib.SetFontFile
     UI.GetShape, UI.ShapeList, UI.SetShapeMask, UI.ShapeBorder = lib.GetShape, lib.ShapeList, lib.SetShapeMask, lib.ShapeBorder
-    UI.Rounded = lib.Rounded
+    UI.Rounded, UI.ShapeEdge = lib.Rounded, lib.ShapeEdge
     function UI.MediaList(kind, opts)
         opts = opts or {}
         if opts.none and not opts.noneLabel then
