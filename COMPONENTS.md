@@ -360,12 +360,13 @@ addon that loads it. Embed the lib at `Libs\LibFlatyUI-1.0` in your addon.
 | `UI.SetBarTexture(bar, path)` | status bar texture; `"none"` hides the fill |
 | `UI.SetBgTexture(tex, path)` | texture or atlas; `"none"` hides it |
 | `UI.SetFontFile(fs, path, size, flags)` | font with the game's font as fallback |
-| `UI.ShapeList()`, `UI.GetShape(key)` | shapes: `{ key, name, mask, glow }` |
+| `UI.ShapeList()`, `UI.GetShape(key)` | shapes: `{ key, name, mask, glow, hole }` |
 | `UI.ShapeEdge(key, angle, halfW, halfH, extra)` | x, y of the shape's edge in a direction (degrees, 0 right, 90 up), plus `extra` px past it: icons around a minimap |
 | `UI.Rounded(pct)` | key of the rounded square with `pct`% round corners (`"r0"`-`"r100"`), for a Corners slider |
 | `UI.SetShapeMask(texture, key)` | cut a texture to a shape |
+| `UI.SetShapeRing(texture, key, size)` | cut a texture to the shape's outline, `size` px thick and empty inside: a border under a see-through background. Size the texture first |
 | `UI.ShapeBorder(frame)` | border and glow of a shape behind a frame: `:SetShape(key)`, `:SetBorder(size, color)`, `:SetGlow(color)` |
-| `LibStub("LibFlatyUI-1.0").RegisterShape(def)` | add a shape: `{ key, name, mask, glow }` |
+| `LibStub("LibFlatyUI-1.0").RegisterShape(def)` | add a shape: `{ key, name, mask, glow, hole }` (`hole` optional) |
 
 Save the path the dropdown gives. A path into another addon's copy of the lib
 still works: `ResolveMedia` finds the file in the copy that runs.
@@ -379,6 +380,22 @@ UI.SetBarTexture(myBar, db.texture)
 
 A shape's mask works with `Minimap:SetMaskTexture(UI.GetShape(key).mask)`.
 Its glow file holds the shape in its middle 3/4; `ShapeBorder` places it.
+Its hole file holds the shape inside out in its middle half; `SetShapeRing`
+places it (`tools/make-holes.mjs` makes them from the masks).
+
+`ShapeBorder` draws the border as a filled shape behind the frame, so it
+needs an opaque frame. Under a see-through background, use a ring:
+
+```lua
+local bg = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+bg:SetTexture(UI.GetShape(key).mask)
+bg:SetVertexColor(0, 0, 0, 0.4)         -- see-through
+local edge = f:CreateTexture(nil, "BACKGROUND", nil, 2)
+edge:SetTexture("Interface\\Buttons\\WHITE8X8")
+edge:SetVertexColor(1, 1, 1, 1)
+edge:SetSize(w, h)
+UI.SetShapeRing(edge, key, 1)           -- 1 px border, nothing inside
+```
 
 ## Theme
 

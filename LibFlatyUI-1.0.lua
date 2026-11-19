@@ -37,7 +37,7 @@
 -------------------------------------------------------------------------------
 
 local LOADER = ...   -- the addon whose TOC loads this file (for the media path)
-local MAJOR, MINOR = "LibFlatyUI-1.0", 19
+local MAJOR, MINOR = "LibFlatyUI-1.0", 20
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -426,7 +426,8 @@ lib.mediaEvents:SetScript("OnEvent", RegisterLSM)
 -- Rounded squares come in every percent of roundness, from 0 (square) to
 -- 100 (circle): key "r0" ... "r100", or lib.Rounded(pct) for the key. The
 -- named shapes are some of them. Addons can add more:
--- lib.RegisterShape({ key, name, mask, glow }).
+-- lib.RegisterShape({ key, name, mask, glow, hole }) (hole: optional, the
+-- mask inside out at half size in the middle of its file, for rings).
 -------------------------------------------------------------------------------
 lib.shapes = lib.shapes or {}
 
@@ -451,7 +452,8 @@ local function RoundedShape(pct, name)
     if not rounded[pct] then
         local file = ("Rounded\\R%03d"):format(pct)
         rounded[pct] = { key = "r" .. pct, name = name or (PREFIX .. pct .. "%"), corners = pct,
-            mask = MEDIA .. "Masks\\" .. file, glow = MEDIA .. "Glows\\" .. file }
+            mask = MEDIA .. "Masks\\" .. file, glow = MEDIA .. "Glows\\" .. file,
+            hole = MEDIA .. "Holes\\" .. file }
     end
     return rounded[pct]
 end
@@ -517,6 +519,36 @@ function lib.SetShapeMask(tex, key)
         tex:AddMaskTexture(tex.flatyMask)
     end
     tex.flatyMask:SetTexture(lib.GetShape(key).mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+end
+
+-- Cut a texture to the outline of a shape: a ring size px thick along its
+-- edge, empty inside (a border that stays a border under a see-through
+-- background). Two masks: the shape, and its hole file over the inside.
+-- Size the texture first (SetSize); call again after it changes size.
+-- Shapes without a hole file get the plain shape.
+--   tex:SetTexture("Interface\\Buttons\\WHITE8X8")
+--   tex:SetVertexColor(r, g, b, a)
+--   lib.SetShapeRing(tex, key, 1)
+function lib.SetShapeRing(tex, key, size)
+    local shape = lib.GetShape(key)
+    lib.SetShapeMask(tex, key)
+    if not tex.flatyHole then
+        tex.flatyHole = tex:GetParent():CreateMaskTexture()
+    end
+    local w, h = tex:GetSize()
+    local iw, ih = w - 2 * size, h - 2 * size
+    local ring = shape.hole and iw > 0 and ih > 0
+    if ring ~= tex.flatyHoleOn then
+        if ring then tex:AddMaskTexture(tex.flatyHole) else tex:RemoveMaskTexture(tex.flatyHole) end
+        tex.flatyHoleOn = ring
+    end
+    if not ring then return end
+    -- the shape's hole fills the middle half of the file: the file spans
+    -- twice the inside, centered, and stays white past the outside
+    tex.flatyHole:SetTexture(shape.hole, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    tex.flatyHole:ClearAllPoints()
+    tex.flatyHole:SetPoint("CENTER", tex, "CENTER")
+    tex.flatyHole:SetSize(2 * iw, 2 * ih)
 end
 
 -- Border and glow of a shape around a frame, drawn behind it. The frame's
@@ -3057,6 +3089,7 @@ function lib:New(theme)
     UI.Media, UI.ResolveMedia = lib.Media, lib.ResolveMedia
     UI.SetBarTexture, UI.SetBgTexture, UI.SetFontFile = lib.SetBarTexture, lib.SetBgTexture, lib.SetFontFile
     UI.GetShape, UI.ShapeList, UI.SetShapeMask, UI.ShapeBorder = lib.GetShape, lib.ShapeList, lib.SetShapeMask, lib.ShapeBorder
+    UI.SetShapeRing = lib.SetShapeRing
     UI.Rounded, UI.ShapeEdge = lib.Rounded, lib.ShapeEdge
     function UI.MediaList(kind, opts)
         opts = opts or {}
